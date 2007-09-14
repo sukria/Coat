@@ -8,76 +8,67 @@ use Carp;
 use Exporter;
 use base 'Exporter';
 use vars qw(@EXPORT $VERSION);
-@EXPORT = qw(var);
+@EXPORT  = qw(var);
 $VERSION = '0.1';
 
-# we override the import method to actually force the "strict" and "warnings"
-# modes to children.
-sub import
-{
-    my $caller = caller;
-    
-    strict->import;
-    warnings->import;
-
-    return if $caller eq 'main';
-    Coat->export_to_level(1, @_);
-}
+##############################################################################
+# Static declarations  (scope of the class)
+##############################################################################
 
 # This is the class placeholder for attribute descriptions
-my $rh_attrs = {};
+# it's present in scope of the class itself, not for each instance
+my $CLASS_ATTRS = {};
 
 # public class methods
 
-# the var method is exported, it allows us to delcare attributes 
+# the var method is exported, it allows us to delcare attributes
 # for the class
 # default type is "scalar"
-sub var
-{
+sub var {
     my ($name, %options) = @_;
     my $scope = __getscope();
-    $rh_attrs->{$scope}{$name} = {type => 'Scalar', %options};
+    $CLASS_ATTRS->{$scope}{$name} = { type => 'Scalar', %options };
 }
 
-# public instance methods
+##############################################################################
+# Public instance methods
+##############################################################################
 
-sub attrs
-{
+# returns the attributes descriptions for the class of that instance
+sub attrs {
     my ($self) = @_;
-    return $rh_attrs->{__getscope($self)};
+    return $CLASS_ATTRS->{ __getscope($self) };
 }
 
-sub has
-{
+# tells if the given attribute is delcared for the class of that instance
+sub has {
     my ($self, $var) = @_;
-    return exists $rh_attrs->{__getscope($self)}{$var};
+    return exists $CLASS_ATTRS->{ __getscope($self) }{$var};
 }
 
-# init an instance : put default values and set values 
+# init an instance : put default values and set values
 # given at instanciation time
-sub init
-{
+sub init {
     my ($self, %attrs) = @_;
 
     # default values
     my $class_attr = $self->attrs;
     foreach my $attr (keys %{$class_attr}) {
         if (defined $class_attr->{$attr}{default}) {
-            $self->set( $attr, $class_attr->{$attr}{default} );
+            $self->set($attr, $class_attr->{$attr}{default});
         }
     }
 
     # forced values
     foreach my $attr (keys %attrs) {
-        $self->set( $attr, $attrs{$attr} );
+        $self->set($attr, $attrs{$attr});
     }
 }
 
 # The default constructor
-sub new
-{
+sub new {
     my ($class, %args) = @_;
-    
+
     my $self = {};
     bless $self, $class;
 
@@ -87,17 +78,18 @@ sub new
 }
 
 # accessors for the instance attributes : set
-sub set
-{
+sub set {
     my ($self, $attr, $value) = @_;
-    unless ( $self->has( $attr ) ) {
-        croak "Unknown attribute '$attr' for class ".ref($self).", cannot set";
+    unless ($self->has($attr)) {
+        croak "Unknown attribute '$attr' for class "
+          . ref($self)
+          . ", cannot set";
     }
 
     # check the attribute's value match its type
     my $attrs = $self->attrs;
     my $type  = $attrs->{$attr}{type};
-    unless ( __value_is_valid( $value, $type ) ) {
+    unless (__value_is_valid($value, $type)) {
         croak "$type '$attr' cannot be set to '$value'";
     }
 
@@ -106,18 +98,18 @@ sub set
 }
 
 # accessors for the instance attributes : get
-sub get
-{
+sub get {
     my ($self, $attr) = @_;
-    unless ( $self->has( $attr ) ) {
-        croak "Unknown attribute '$attr' for class ".ref($self).", cannot get";
+    unless ($self->has($attr)) {
+        croak "Unknown attribute '$attr' for class "
+          . ref($self)
+          . ", cannot get";
     }
     return $self->{_values}{$attr};
 }
 
 # some AUTOLOAD magic to build dynamic accessors for each attribute
-sub AUTOLOAD
-{
+sub AUTOLOAD {
     my ($self, @args) = @_;
 
     our $AUTOLOAD;
@@ -137,45 +129,44 @@ sub AUTOLOAD
     }
 
     else {
-        croak "unknown method '$method' for class '".ref($self)."'";
+        croak "unknown method '$method' for class '" . ref($self) . "'";
     }
 
 }
 
+##############################################################################
+# Private methods
+##############################################################################
 
-# private
-
-# The scope is used for saving attribute properties, we want to have 
+# The scope is used for saving attribute properties, we want to have
 # one namespace per class that inherits from us
-sub __getscope
-{
+sub __getscope {
     my ($self) = @_;
-    
+
     if (defined $self) {
         return ref($self);
     }
     else {
-        return( scalar( caller(1) ) );
-    }   
+        return (scalar(caller(1)));
+    }
 }
 
 # check the attributes integrity
-sub __value_is_valid($$)
-{
+sub __value_is_valid($$) {
     my ($value, $type) = @_;
     return 1 if $type eq 'Scalar';
-    
+
     my $lexical_rules = {
-        Int => '^\d+$',
-        String => '\w*',
+        Int     => '^\d+$',
+        String  => '\w*',
         Boolean => '^[01]$',
     };
-    
+
     if (defined $lexical_rules->{$type}) {
         my $pattern = $lexical_rules->{$type};
         return $value =~ /$pattern/;
     }
-    
+
     # refs
     elsif ($type eq 'ArrayRef') {
         return ref($value) eq 'ARRAY';
@@ -195,14 +186,27 @@ sub __value_is_valid($$)
     }
 }
 
-# loading time
+##############################################################################
+# Loading time cooking
+##############################################################################
+
+# we override the import method to actually force the "strict" and "warnings"
+# modes to children.
+sub import {
+    my $caller = caller;
+
+    strict->import;
+    warnings->import;
+
+    return if $caller eq 'main';
+    Coat->export_to_level(1, @_);
+}
 
 # We force the caller to inherit from us
 {
     my $caller = caller();
     eval "\@${caller}::ISA = qw(Coat)";
 };
-
 
 1;
 __END__
