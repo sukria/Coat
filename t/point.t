@@ -5,15 +5,8 @@
 package Point;
 use Coat;
 
-var 'x' => (
-    type => 'Int',
-    default => 0
-);
-
-var 'y' => (
-    type => 'Int',
-    default => 0
-);
+var 'x' => ( type => 'Int', default => 0);
+var 'y' => ( type => 'Int', default => 0);
 
 1;
 

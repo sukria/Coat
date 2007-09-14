@@ -8,8 +8,12 @@ use Carp;
 use Exporter;
 use base 'Exporter';
 use vars qw(@EXPORT $VERSION);
-@EXPORT  = qw(var);
+
+# The current version of this library
 $VERSION = '0.1';
+
+# our exported keywords for class description
+@EXPORT  = qw(var extends);
 
 ##############################################################################
 # Static declarations  (scope of the class)
@@ -28,6 +32,26 @@ sub var {
     my ($name, %options) = @_;
     my $scope = __getscope();
     $CLASS_ATTRS->{$scope}{$name} = { type => 'Scalar', %options };
+}
+
+# this is where inheritance takes place
+sub extends 
+{
+    my ($father) = @_;
+    croak "Cannot extend without a class name" unless 
+        defined $father;
+
+    croak "Class '$father' is unknown, cannot extends" unless  
+        exists $CLASS_ATTRS->{$father};
+
+    my $class = __getscope();
+
+    # first we inherit the class description from our father
+    __copy_class_description($father, $class);
+
+    # then we tell Perl we actually inherits from our father
+    eval "\@${class}::ISA = qw($father)";
+    croak "Error : $@" if $@;
 }
 
 ##############################################################################
@@ -186,6 +210,14 @@ sub __value_is_valid($$) {
     }
 }
 
+sub __copy_class_description($$)
+{
+    my ($source, $dest) = @_;
+    foreach my $key (keys %{$CLASS_ATTRS->{$source}}) {
+        $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
+    }
+}
+
 ##############################################################################
 # Loading time cooking
 ##############################################################################
@@ -290,6 +322,28 @@ The attribute's default value (the attribute will have this
 value at instanciation time if none given).
 
 =back
+
+=head2 extends
+
+The keyword "extends" allows you to declare that a class "foo" inherits from a
+class "bar". All attributes properties of class "bar" will be applied to class
+"foo" as well as the accessors of class "bar".
+
+Here is an example with Point3D, an extension of Point previously declared in
+this documentation:
+
+  package Point3D;
+
+  use Coat;
+  extends 'Point';
+
+  var 'z' => (type => 'Int', default => 0):
+
+  my $point3d = new Point3D x => 1, y => 3, z => 1;
+  $point3d->x;    # will return: 1
+  $point3d->y;    # will return: 3
+  $point3d->z;    # will return: 1
+
 
 =head1 AUTHOR
 
