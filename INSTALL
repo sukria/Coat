@@ -1,0 +1,10 @@
+Install instructions
+====================
+
+Basically:
+
+$ perl Makefile.PL
+$ make
+$ make test
+$ make install
+

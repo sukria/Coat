@@ -1,0 +1,8 @@
+2007-09-14 -- release 0.1 -- Alexis Sukrieh
+
+  * Initial release
+    - attribute declaration
+    - inheritance
+    - automagic dynamic accessors
+    - hooks (before, after and around)
+

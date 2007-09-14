@@ -1,0 +1,23 @@
+
+                                  C O A T 
+
+
+    "The sky was rainy, the wind blew strongly and my bag was heavy.
+     I left it back here, and only with a Coat, I went out happily."
+
+
+This module was inspired by the excellent Moose meta class which provides
+enhanced object creation for Perl 5.
+
+Moose is great, but slow and has huge dependencies which makes it difficult to
+use in restricted environments.
+
+This module implements the basic goodness of Moose, namely the accessor
+automagic, the inheritance facility and the hooks mechanism. 
+
+It is designed for developers who want to write clean object code with Perl 5
+without depending on Moose. This implies you don't rely on all the features of
+Moose; and you don't depend on a huge set of dependencies, all you have to
+install is Coat (which is independant, no need of external modules).
+
+
