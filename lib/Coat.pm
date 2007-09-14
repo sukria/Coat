@@ -13,7 +13,7 @@ use vars qw(@EXPORT $VERSION);
 $VERSION = '0.1';
 
 # our exported keywords for class description
-@EXPORT  = qw(var extends);
+@EXPORT  = qw(var extends before after around);
 
 ##############################################################################
 # Static declarations  (scope of the class)
@@ -50,8 +50,101 @@ sub extends
     __copy_class_description($father, $class);
 
     # then we tell Perl we actually inherits from our father
-    eval "\@${class}::ISA = qw($father)";
-    croak "Error : $@" if $@;
+    eval "push \@${class}::ISA, '$father'";
+
+    # save the fact that $class inherits from $father
+    $CLASS_ATTRS->{__father}{$class} = $father;
+}
+
+# returns the parent class of the class given
+sub super
+{
+    my ($class) = @_;
+    $class = __getscope() unless defined $class;
+    return $CLASS_ATTRS->{__father}{$class};
+}
+
+# the before hook catches the call to an inherited method and exectue 
+# the code given before the inherited method is called.
+sub before
+{
+    my ($method, $code) = @_;
+    my $class = __getscope();
+    
+    # we don't support multiple hook around one sub
+    # let's throw an exception if such a thing happens
+    if (defined $CLASS_ATTRS->{__hooks}{$class}{after}{$method}) {
+        croak "Hook 'after' already defined for method '$method', "
+            . "cannot add a 'before' hook.";
+    }
+    if (defined $CLASS_ATTRS->{__hooks}{$class}{around}{$method}) {
+        croak "Hook 'around' already defined for method '$method', "
+            . "cannot add a 'before' hook.";
+    }
+
+    # save the hook
+    $CLASS_ATTRS->{__hooks}{$class}{before}{$method} = $code;
+
+    # build the code
+    my $sub_with_hook = __hook_build_before($class, $method);
+
+    # evaluate it so the sub is in the namespace of the class
+    eval "$sub_with_hook";
+    croak "Hook 'before' on method '$method' failed: $@" if $@;
+}
+
+
+# the after hook catches the call to an inherited method and executes
+# the code after the inherited method is called
+sub after
+{
+    my ($method, $code) = @_;
+    my $class = __getscope();
+    
+    # we don't support multiple hook around one sub
+    # let's throw an exception if such a thing happens
+    if (defined $CLASS_ATTRS->{__hooks}{$class}{before}{$method}) {
+        croak "Hook 'before' already defined for method '$method', "
+            . "cannot add an 'after' hook.";
+    }
+    if (defined $CLASS_ATTRS->{__hooks}{$class}{around}{$method}) {
+        croak "Hook 'around' already defined for method '$method', "
+            . "cannot add an 'after' hook.";
+    }
+
+    # save the hook
+    $CLASS_ATTRS->{__hooks}{$class}{after}{$method} = $code;
+
+    my $sub_with_hook = __hook_build_after($class, $method);
+    eval "$sub_with_hook";
+    croak "Hook 'after' on method '$method' failed: $@" if $@;
+}
+
+# the around hook catches the call to an inherited method and lets you do 
+# whatever you want with it, you get the coderef of the parent method and the
+# args, you play !
+sub around
+{
+    my ($method, $code) = @_;
+    my $class = __getscope();
+ 
+    # we don't support multiple hook around one sub
+    # let's throw an exception if such a thing happens
+    if (defined $CLASS_ATTRS->{__hooks}{$class}{before}{$method}) {
+        croak "Hook 'before' already defined for method '$method', "
+            . "cannot add an 'around' hook.";
+    }
+    if (defined $CLASS_ATTRS->{__hooks}{$class}{after}{$method}) {
+        croak "Hook 'around' already defined for method '$method', "
+            . "cannot add an 'around' hook.";
+    }
+
+    # save the hook
+    $CLASS_ATTRS->{__hooks}{$class}{around}{$method} = $code;
+
+    my $sub_with_hook = __hook_build_around($class, $method);
+    eval "$sub_with_hook";
+    croak "Hook 'around' on method '$method' failed: $@" if $@;
 }
 
 ##############################################################################
@@ -218,6 +311,68 @@ sub __copy_class_description($$)
     }
 }
 
+# The following __hook_* stuff is about building methods dynamically
+# in the scope of the class.
+# The resulting method will mix the hook and the parent method to fit 
+# was is asked.
+
+# builds the code for getting the father package
+sub __hook_call_father
+{
+    my ($class, $method) = @_;
+    my $code = "
+        my \$father = Coat::super('$class');
+        croak \"Unknown father for class '$class'\" unless defined \$father;";
+    return $code;
+}
+
+# builds the sub resulting of a "before" hook (first call the code given in the 
+# hook, then call the father's method and returns its result)
+sub __hook_build_before
+{
+    my ($class, $method) = @_;
+    my $code = "sub ${class}::$method \n"
+      . "{\n"
+      . "my (\$self, \@args) = \@_; \n"
+      . "&{\$CLASS_ATTRS->{__hooks}{$class}{before}{$method}}(\$self, \@args);"
+      . __hook_call_father($class, $method)."\n"
+      . "return eval(\"\${father}::$method(\".'\$self, \@args)');"
+      . "}";
+    return $code;
+}
+
+# builds the sub resulting of an "after" hook (call the father's method, then
+# returns the result of the code given in the hook, passing to it te father's
+# result.)
+sub __hook_build_after
+{
+    my ($class, $method) = @_;
+    my $code = "sub ${class}::$method \n"
+      . "{\n"
+      . "my (\$self, \@args) = \@_; \n"
+      . __hook_call_father($class, $method)."\n"
+      . "my \@res = eval(\"\${father}::$method(\".'\$self, \@args)');"
+      . "return &{\$CLASS_ATTRS->{__hooks}{$class}{after}{$method}}(\$self, \@res, \@args);"
+      . "}";
+    return $code;
+}
+
+# builds the sub resulting of an "around" method (gets the coderef of the
+# father's method, then call the code given to the hook, passing to it the
+# coderef)
+sub __hook_build_around
+{
+    my ($class, $method) = @_;
+    my $code = "sub ${class}::$method \n"
+      . "{\n"
+      . "my (\$self, \@args) = \@_; \n"
+      . __hook_call_father($class, $method)."\n"
+      . "my \$orig = eval(\"\\\\&\${father}::$method\");"
+      . "return &{\$CLASS_ATTRS->{__hooks}{$class}{around}{$method}}(\$orig, \$self, \@args);"
+      . "}";
+    return $code;
+}
+
 ##############################################################################
 # Loading time cooking
 ##############################################################################
@@ -234,10 +389,19 @@ sub import {
     Coat->export_to_level(1, @_);
 }
 
+
+sub coat_init_class
+{
+    my ($class) = @_;
+    $class = caller() unless defined $class;
+    eval "push \@${class}::ISA, 'Coat'";
+}
+
+
 # We force the caller to inherit from us
 {
     my $caller = caller();
-    eval "\@${caller}::ISA = qw(Coat)";
+    coat_init_class($caller);
 };
 
 1;
@@ -344,6 +508,84 @@ this documentation:
   $point3d->y;    # will return: 3
   $point3d->z;    # will return: 1
 
+=head1 HOOKS
+
+Like Moose, Coat lets you define hooks. There are three kind of hooks :
+before, after and around.
+
+=head2 before
+
+When writing a "before" hook you can catch the call to an inherited method,
+and execute some code before the inherited method is called.
+
+Example:
+
+  package Foo;
+  use Coat;
+
+  sub method { return 4; }
+
+  package Bar;
+  use Coat;
+  extends 'Foo';
+
+  around 'method' => sub {
+    my ($self, @args) = @_;
+    # ... here some stuff to do before Foo::method is called
+  };
+
+
+=head2 after
+
+When writing an "after" hook you can catch the call to an inherited method and 
+execute xome code after the original method is executed. You receive in your
+hook the result of the father's method.
+
+Example:
+
+  package Foo;
+  use Coat;
+
+  sub method { return 4; }
+
+  package Bar;
+  use Coat;
+  extends 'Foo';
+
+  after 'method' => sub {
+    my ($self, $result, @args) = @_;
+    return $result + 3;
+  };
+
+=head2 around
+
+When writing an "around" hook you can catch the call to an inherited method and 
+actually redefine it on-the-fly.
+You get the code reference to the parent's method and its arguments, and can
+do what you want then. It's a very powerful hook but also dangerous, so be
+careful when writing such a hook not to break the original call.
+
+Example:
+
+  package Foo;
+  use Coat;
+
+  sub method { return 4; }
+
+  package Bar;
+  use Coat;
+  extends 'Foo';
+
+  # the following around hook implement the previous 'after' hook 
+  # defined in this documentaiton.
+
+  around 'method' => sub {
+    my $orig = shift;
+    my ($self, @args) = @_;
+
+    my $res = $self->$orig(@args);
+    return $res + 3;
+  }
 
 =head1 AUTHOR
 
