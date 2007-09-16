@@ -49,10 +49,21 @@ before 'reverse' => sub {
     $self->value( "12345" );
 };
 
+before 'reverse' => sub {
+    my ($self) = @_;
+    $self->value('sukria');
+};
+
 after 'crypt' => sub {
     my ($self, $result, @args) = @_;
-    return "after: $result";
+    return "after 1: $result";
 };
+
+after 'crypt' => sub {
+    my ($self, $result, @args) = @_;
+    return "after 2: $result";
+};
+
 
 around 'hello' => sub {
     my $orig = shift;
@@ -76,6 +87,16 @@ after 'minus' => sub {
     return $result - $value;
 };
 
+package FuzzerNew;
+
+use Coat;
+extends 'Fuzzer';
+
+after 'minus' => sub {
+    my ($self, $result, $value) = @_;
+    return 1000;
+};
+
 # test
 
 package main;
@@ -95,8 +116,8 @@ ok( defined $fuzzer, 'new Fuzzer' );
 
 ok( $fuzzer->reverse, '$fuzzer->reverse');
 ok( ($fuzzer->reverse ne $builder->reverse), 'reverse changed');
-ok( $fuzzer->reverse eq '54321', '$fuzzer->reverse eq 54321');
-ok( $fuzzer->value eq '12345', '$fuzzer->value eq 12345' );
+ok( $fuzzer->reverse eq 'airkus', '$fuzzer->reverse eq : '.$fuzzer->reverse);
+ok( $fuzzer->value eq 'sukria', '$fuzzer->value eq sukria' );
 
 my $crypt_orig = $builder->crypt;
 ok ($crypt_orig, 'crypt : '.$crypt_orig);
@@ -105,6 +126,7 @@ my $crypt_new = $fuzzer->crypt;
 ok( $crypt_new, "crypt_new: $crypt_new");
 
 ok(($crypt_orig ne $crypt_new), '$crypt_orig != $crypt_new');
+ok($crypt_new =~ /^after 2: /, '$crypt_new =~ /after 2: /'.$crypt_new);
 
 
 ok( $builder->hello('builder'), 
@@ -128,3 +150,5 @@ ok( $builder->minus(2) == 4, '$builder->minus(2) == 4');
 
 ok( $fuzzer->minus(2) == 2, '$fuzzer->minus(2) == 2');
 
+my $fu2 = new FuzzerNew value => 'toto', number => 10;
+ok($fu2->minus(2), 'FuzzerNew->minus');

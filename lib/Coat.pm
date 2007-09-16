@@ -71,26 +71,27 @@ sub before
     my ($method, $code) = @_;
     my $class = __getscope();
     
-    # we don't support multiple hook around one sub
-    # let's throw an exception if such a thing happens
-    if (defined $CLASS_ATTRS->{__hooks}{$class}{after}{$method}) {
-        croak "Hook 'after' already defined for method '$method', "
-            . "cannot add a 'before' hook.";
-    }
-    if (defined $CLASS_ATTRS->{__hooks}{$class}{around}{$method}) {
-        croak "Hook 'around' already defined for method '$method', "
-            . "cannot add a 'before' hook.";
-    }
-
     # save the hook
-    $CLASS_ATTRS->{__hooks}{$class}{before}{$method} = $code;
+    $CLASS_ATTRS->{__hooks}{$class}{before}{$method} = [] unless 
+        defined $CLASS_ATTRS->{__hooks}{$class}{before}{$method};
+    push @{$CLASS_ATTRS->{__hooks}{$class}{before}{$method}}, $code;
 
-    # build the code
-    my $sub_with_hook = __hook_build_before($class, $method);
+    my $super = super($class);
+    my $before = $CLASS_ATTRS->{__hooks}{$class}{before}{$method};
 
-    # evaluate it so the sub is in the namespace of the class
-    eval "$sub_with_hook";
-    croak "Hook 'before' on method '$method' failed: $@" if $@;
+    # build the sub
+    my $full_method = "${class}::${method}";
+    no strict 'refs';
+    undef *${full_method};
+
+    *${full_method} = sub {
+        my ($self, @args) = @_;
+        foreach my $hook (@{$before}) {
+            $hook->(@_);
+        }
+        my $super_method = "${super}::${method}";
+        return &$super_method(@_);
+    };
 }
 
 
@@ -101,23 +102,30 @@ sub after
     my ($method, $code) = @_;
     my $class = __getscope();
     
-    # we don't support multiple hook around one sub
-    # let's throw an exception if such a thing happens
-    if (defined $CLASS_ATTRS->{__hooks}{$class}{before}{$method}) {
-        croak "Hook 'before' already defined for method '$method', "
-            . "cannot add an 'after' hook.";
-    }
-    if (defined $CLASS_ATTRS->{__hooks}{$class}{around}{$method}) {
-        croak "Hook 'around' already defined for method '$method', "
-            . "cannot add an 'after' hook.";
-    }
-
     # save the hook
-    $CLASS_ATTRS->{__hooks}{$class}{after}{$method} = $code;
+    $CLASS_ATTRS->{__hooks}{$class}{after}{$method} = [] unless 
+        defined $CLASS_ATTRS->{__hooks}{$class}{after}{$method};
+    push @{$CLASS_ATTRS->{__hooks}{$class}{after}{$method}}, $code;
 
-    my $sub_with_hook = __hook_build_after($class, $method);
-    eval "$sub_with_hook";
-    croak "Hook 'after' on method '$method' failed: $@" if $@;
+    my $super = super($class);
+    my $after = $CLASS_ATTRS->{__hooks}{$class}{after}{$method};
+
+    # build the sub
+    my $full_method = "${class}::${method}";
+    no strict 'refs';
+    undef *${full_method};
+
+    *${full_method} = sub {
+        my ($self, @args) = @_;
+        my $super_method = "${super}::${method}";
+        my @res = &$super_method(@_);
+        foreach my $hook (@{$after}) {
+            @res = $hook->($self, @res, @args);
+        }
+        wantarray ? 
+            return @res :
+            return $res[0];
+    };
 }
 
 # the around hook catches the call to an inherited method and lets you do 
