@@ -90,75 +90,33 @@ sub __build_sub_with_hook($$)
         hooks_around( $class, $method )
     );
 
-    if (@$before && @$after) {
-        *${full_method} = sub {
-            my ($self, @args) = @_;
-            my @result;
+    *${full_method} = sub {
+        my ($self, @args) = @_;
+        my @result;
 
+        if (@$before) {
             $_->(@_) for @$before;
-            
-            if (@$around) {
-                @result = $_->(\&$super_method, $self, @args) for @$around;
-            }
-            else {
-                @result = &$super_method($self, @args);
-            }
+        }
 
+        if (@$around) {
+            my $orig = \&$super_method;
+            foreach my $hook (@$around) {
+                @result = $hook->($orig, $self, @args);
+                $orig = $hook;
+            }
+        }
+        else {
+            @result = &$super_method($self, @args);
+        }
+
+        if (@$after) {
             @result = $_->($self, @result, @args) for @$after;
-            
-            wantarray ?
-                return @result :
-                return $result[0];
-        };
-    }
+        }
 
-    elsif (@$before && !@$after) {
-        *${full_method} = sub {
-            my ($self, @args) = @_;
-            $_->(@_) for @$before;
-
-            if (@$around) {
-                my @result = $_->(\&$super_method, $self, @args) for @$around;
-                return @result;
-            }
-            else {
-                return &$super_method($self, @args);
-            }
-        };
-    }
-
-    elsif (@$after && !@$before) {
-        *${full_method} = sub {
-            my ($self, @args) = @_;
-            my @result;
-            
-            if (@$around) {
-                @result = $_->(\&$super_method, $self, @args) for @$around;
-            }
-            else {
-                @result = &$super_method($self, @args);
-            }
-
-            @result = $_->($self, @result, @args) for @$after;
-
-            wantarray ?
-                return @result :
-                return $result[0];
-        };
-    }
-
-    elsif (@$around) {
-        *${full_method} = sub {
-            my ($self, @args) = @_;
-            my @result;
-
-            @result = $_->(\&$super_method, $self, @args) for @$around;
-            
-            wantarray ?
-                return @result :
-                return $result[0];
-        };
-    }
+        wantarray ?
+            return @result :
+            return $result[0];
+    };
 }
 
 # the before hook catches the call to an inherited method and exectue 
