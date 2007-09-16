@@ -64,34 +64,111 @@ sub super
     return $CLASS_ATTRS->{__father}{$class};
 }
 
+sub hooks        { $CLASS_ATTRS->{__hooks}{$_[0]} }
+sub hooks_before { $CLASS_ATTRS->{__hooks}{$_[0]}{before}{$_[1]} ||= [] }
+sub hooks_after  { $CLASS_ATTRS->{__hooks}{$_[0]}{after}{$_[1]} ||= [] }
+sub hooks_around { $CLASS_ATTRS->{__hooks}{$_[0]}{around}{$_[1]} ||= [] }
+
+sub __hooks_before_push { push @{ hooks_before($_[0], $_[1]) }, $_[2] };
+sub __hooks_after_push  { push @{ hooks_after($_[0], $_[1])  }, $_[2] };
+sub __hooks_around_push { push @{ hooks_around($_[0], $_[1]) }, $_[2] };
+
+sub __build_sub_with_hook($$)
+{
+    my ($class, $method) = @_;
+    
+    my $super  = super( $class );
+    my $super_method = "${super}::${method}";
+    
+    my $full_method = "${class}::${method}";
+    no strict 'refs';
+    undef *${full_method};
+
+    my ($before, $after, $around) = (
+        hooks_before( $class, $method ),
+        hooks_after ( $class, $method ),
+        hooks_around( $class, $method )
+    );
+
+    if (@$before && @$after) {
+        *${full_method} = sub {
+            my ($self, @args) = @_;
+            my @result;
+
+            $_->(@_) for @$before;
+            
+            if (@$around) {
+                @result = $_->(\&$super_method, $self, @args) for @$around;
+            }
+            else {
+                @result = &$super_method($self, @args);
+            }
+
+            @result = $_->($self, @result, @args) for @$after;
+            
+            wantarray ?
+                return @result :
+                return $result[0];
+        };
+    }
+
+    elsif (@$before && !@$after) {
+        *${full_method} = sub {
+            my ($self, @args) = @_;
+            $_->(@_) for @$before;
+
+            if (@$around) {
+                my @result = $_->(\&$super_method, $self, @args) for @$around;
+                return @result;
+            }
+            else {
+                return &$super_method($self, @args);
+            }
+        };
+    }
+
+    elsif (@$after && !@$before) {
+        *${full_method} = sub {
+            my ($self, @args) = @_;
+            my @result;
+            
+            if (@$around) {
+                @result = $_->(\&$super_method, $self, @args) for @$around;
+            }
+            else {
+                @result = &$super_method($self, @args);
+            }
+
+            @result = $_->($self, @result, @args) for @$after;
+
+            wantarray ?
+                return @result :
+                return $result[0];
+        };
+    }
+
+    elsif (@$around) {
+        *${full_method} = sub {
+            my ($self, @args) = @_;
+            my @result;
+
+            @result = $_->(\&$super_method, $self, @args) for @$around;
+            
+            wantarray ?
+                return @result :
+                return $result[0];
+        };
+    }
+}
+
 # the before hook catches the call to an inherited method and exectue 
 # the code given before the inherited method is called.
 sub before
 {
     my ($method, $code) = @_;
     my $class = __getscope();
-    
-    # save the hook
-    $CLASS_ATTRS->{__hooks}{$class}{before}{$method} = [] unless 
-        defined $CLASS_ATTRS->{__hooks}{$class}{before}{$method};
-    push @{$CLASS_ATTRS->{__hooks}{$class}{before}{$method}}, $code;
-
-    my $super = super($class);
-    my $before = $CLASS_ATTRS->{__hooks}{$class}{before}{$method};
-
-    # build the sub
-    my $full_method = "${class}::${method}";
-    no strict 'refs';
-    undef *${full_method};
-
-    *${full_method} = sub {
-        my ($self, @args) = @_;
-        foreach my $hook (@{$before}) {
-            $hook->(@_);
-        }
-        my $super_method = "${super}::${method}";
-        return &$super_method(@_);
-    };
+    __hooks_before_push( $class, $method, $code );
+    __build_sub_with_hook( $class, $method );
 }
 
 
@@ -101,31 +178,8 @@ sub after
 {
     my ($method, $code) = @_;
     my $class = __getscope();
-    
-    # save the hook
-    $CLASS_ATTRS->{__hooks}{$class}{after}{$method} = [] unless 
-        defined $CLASS_ATTRS->{__hooks}{$class}{after}{$method};
-    push @{$CLASS_ATTRS->{__hooks}{$class}{after}{$method}}, $code;
-
-    my $super = super($class);
-    my $after = $CLASS_ATTRS->{__hooks}{$class}{after}{$method};
-
-    # build the sub
-    my $full_method = "${class}::${method}";
-    no strict 'refs';
-    undef *${full_method};
-
-    *${full_method} = sub {
-        my ($self, @args) = @_;
-        my $super_method = "${super}::${method}";
-        my @res = &$super_method(@_);
-        foreach my $hook (@{$after}) {
-            @res = $hook->($self, @res, @args);
-        }
-        wantarray ? 
-            return @res :
-            return $res[0];
-    };
+    __hooks_after_push( $class, $method, $code );
+    __build_sub_with_hook( $class, $method );
 }
 
 # the around hook catches the call to an inherited method and lets you do 
@@ -135,24 +189,8 @@ sub around
 {
     my ($method, $code) = @_;
     my $class = __getscope();
- 
-    # we don't support multiple hook around one sub
-    # let's throw an exception if such a thing happens
-    if (defined $CLASS_ATTRS->{__hooks}{$class}{before}{$method}) {
-        croak "Hook 'before' already defined for method '$method', "
-            . "cannot add an 'around' hook.";
-    }
-    if (defined $CLASS_ATTRS->{__hooks}{$class}{after}{$method}) {
-        croak "Hook 'around' already defined for method '$method', "
-            . "cannot add an 'around' hook.";
-    }
-
-    # save the hook
-    $CLASS_ATTRS->{__hooks}{$class}{around}{$method} = $code;
-
-    my $sub_with_hook = __hook_build_around($class, $method);
-    eval "$sub_with_hook";
-    croak "Hook 'around' on method '$method' failed: $@" if $@;
+    __hooks_around_push( $class, $method, $code );
+    __build_sub_with_hook( $class, $method );
 }
 
 ##############################################################################
