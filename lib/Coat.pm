@@ -13,7 +13,7 @@ use vars qw(@EXPORT $VERSION);
 $VERSION = '0.1';
 
 # our exported keywords for class description
-@EXPORT  = qw(var extends before after around);
+@EXPORT = qw(var extends before after around);
 
 ##############################################################################
 # Static declarations  (scope of the class)
@@ -35,14 +35,13 @@ sub var {
 }
 
 # this is where inheritance takes place
-sub extends 
-{
+sub extends {
     my ($father) = @_;
-    croak "Cannot extend without a class name" unless 
-        defined $father;
+    croak "Cannot extend without a class name"
+      unless defined $father;
 
-    croak "Class '$father' is unknown, cannot extends" unless  
-        exists $CLASS_ATTRS->{$father};
+    croak "Class '$father' is unknown, cannot extends"
+      unless exists $CLASS_ATTRS->{$father};
 
     my $class = __getscope();
 
@@ -57,37 +56,35 @@ sub extends
 }
 
 # returns the parent class of the class given
-sub super
-{
+sub super {
     my ($class) = @_;
     $class = __getscope() unless defined $class;
     return $CLASS_ATTRS->{__father}{$class};
 }
 
-sub hooks        { $CLASS_ATTRS->{__hooks}{$_[0]} }
-sub hooks_before { $CLASS_ATTRS->{__hooks}{$_[0]}{before}{$_[1]} ||= [] }
-sub hooks_after  { $CLASS_ATTRS->{__hooks}{$_[0]}{after}{$_[1]} ||= [] }
-sub hooks_around { $CLASS_ATTRS->{__hooks}{$_[0]}{around}{$_[1]} ||= [] }
+sub hooks        { $CLASS_ATTRS->{__hooks}{ $_[0] } }
+sub hooks_before { $CLASS_ATTRS->{__hooks}{ $_[0] }{before}{ $_[1] } ||= [] }
+sub hooks_after  { $CLASS_ATTRS->{__hooks}{ $_[0] }{after}{ $_[1] } ||= [] }
+sub hooks_around { $CLASS_ATTRS->{__hooks}{ $_[0] }{around}{ $_[1] } ||= [] }
 
-sub __hooks_before_push { push @{ hooks_before($_[0], $_[1]) }, $_[2] };
-sub __hooks_after_push  { push @{ hooks_after($_[0], $_[1])  }, $_[2] };
-sub __hooks_around_push { push @{ hooks_around($_[0], $_[1]) }, $_[2] };
+sub __hooks_before_push { push @{ hooks_before($_[0], $_[1]) }, $_[2] }
+sub __hooks_after_push { push @{ hooks_after($_[0], $_[1]) }, $_[2] }
+sub __hooks_around_push { push @{ hooks_around($_[0], $_[1]) }, $_[2] }
 
-sub __build_sub_with_hook($$)
-{
+sub __build_sub_with_hook($$) {
     my ($class, $method) = @_;
-    
-    my $super  = super( $class );
+
+    my $super        = super($class);
     my $super_method = "${super}::${method}";
-    
+
     my $full_method = "${class}::${method}";
     no strict 'refs';
     undef *${full_method};
 
     my ($before, $after, $around) = (
-        hooks_before( $class, $method ),
-        hooks_after ( $class, $method ),
-        hooks_around( $class, $method )
+        hooks_before($class, $method),
+        hooks_after($class, $method),
+        hooks_around($class, $method)
     );
 
     *${full_method} = sub {
@@ -113,42 +110,38 @@ sub __build_sub_with_hook($$)
             @result = $_->($self, @result, @args) for @$after;
         }
 
-        wantarray ?
-            return @result :
-            return $result[0];
+        wantarray
+          ? return @result
+          : return $result[0];
     };
 }
 
-# the before hook catches the call to an inherited method and exectue 
+# the before hook catches the call to an inherited method and exectue
 # the code given before the inherited method is called.
-sub before
-{
+sub before {
     my ($method, $code) = @_;
     my $class = __getscope();
-    __hooks_before_push( $class, $method, $code );
-    __build_sub_with_hook( $class, $method );
+    __hooks_before_push($class, $method, $code);
+    __build_sub_with_hook($class, $method);
 }
-
 
 # the after hook catches the call to an inherited method and executes
 # the code after the inherited method is called
-sub after
-{
+sub after {
     my ($method, $code) = @_;
     my $class = __getscope();
-    __hooks_after_push( $class, $method, $code );
-    __build_sub_with_hook( $class, $method );
+    __hooks_after_push($class, $method, $code);
+    __build_sub_with_hook($class, $method);
 }
 
-# the around hook catches the call to an inherited method and lets you do 
+# the around hook catches the call to an inherited method and lets you do
 # whatever you want with it, you get the coderef of the parent method and the
 # args, you play !
-sub around
-{
+sub around {
     my ($method, $code) = @_;
     my $class = __getscope();
-    __hooks_around_push( $class, $method, $code );
-    __build_sub_with_hook( $class, $method );
+    __hooks_around_push($class, $method, $code);
+    __build_sub_with_hook($class, $method);
 }
 
 ##############################################################################
@@ -307,22 +300,20 @@ sub __value_is_valid($$) {
     }
 }
 
-sub __copy_class_description($$)
-{
+sub __copy_class_description($$) {
     my ($source, $dest) = @_;
-    foreach my $key (keys %{$CLASS_ATTRS->{$source}}) {
+    foreach my $key (keys %{ $CLASS_ATTRS->{$source} }) {
         $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
     }
 }
 
 # The following __hook_* stuff is about building methods dynamically
 # in the scope of the class.
-# The resulting method will mix the hook and the parent method to fit 
+# The resulting method will mix the hook and the parent method to fit
 # was is asked.
 
 # builds the code for getting the father package
-sub __hook_call_father
-{
+sub __hook_call_father {
     my ($class, $method) = @_;
     my $code = "
         my \$father = Coat::super('$class');
@@ -330,31 +321,28 @@ sub __hook_call_father
     return $code;
 }
 
-# builds the sub resulting of a "before" hook (first call the code given in the 
+# builds the sub resulting of a "before" hook (first call the code given in the
 # hook, then call the father's method and returns its result)
-sub __hook_build_before
-{
+sub __hook_build_before {
     my ($class, $method) = @_;
-    my $code = "sub ${class}::$method \n"
-      . "{\n"
+    my $code =
+        "sub ${class}::$method \n" . "{\n"
       . "my (\$self, \@args) = \@_; \n"
       . "&{\$CLASS_ATTRS->{__hooks}{$class}{before}{$method}}(\$self, \@args);"
-      . __hook_call_father($class, $method)."\n"
-      . "return eval(\"\${father}::$method(\".'\$self, \@args)');"
-      . "}";
+      . __hook_call_father($class, $method) . "\n"
+      . "return eval(\"\${father}::$method(\".'\$self, \@args)');" . "}";
     return $code;
 }
 
 # builds the sub resulting of an "after" hook (call the father's method, then
 # returns the result of the code given in the hook, passing to it te father's
 # result.)
-sub __hook_build_after
-{
+sub __hook_build_after {
     my ($class, $method) = @_;
-    my $code = "sub ${class}::$method \n"
-      . "{\n"
+    my $code =
+        "sub ${class}::$method \n" . "{\n"
       . "my (\$self, \@args) = \@_; \n"
-      . __hook_call_father($class, $method)."\n"
+      . __hook_call_father($class, $method) . "\n"
       . "my \@res = eval(\"\${father}::$method(\".'\$self, \@args)');"
       . "return &{\$CLASS_ATTRS->{__hooks}{$class}{after}{$method}}(\$self, \@res, \@args);"
       . "}";
@@ -364,13 +352,12 @@ sub __hook_build_after
 # builds the sub resulting of an "around" method (gets the coderef of the
 # father's method, then call the code given to the hook, passing to it the
 # coderef)
-sub __hook_build_around
-{
+sub __hook_build_around {
     my ($class, $method) = @_;
-    my $code = "sub ${class}::$method \n"
-      . "{\n"
+    my $code =
+        "sub ${class}::$method \n" . "{\n"
       . "my (\$self, \@args) = \@_; \n"
-      . __hook_call_father($class, $method)."\n"
+      . __hook_call_father($class, $method) . "\n"
       . "my \$orig = eval(\"\\\\&\${father}::$method\");"
       . "return &{\$CLASS_ATTRS->{__hooks}{$class}{around}{$method}}(\$orig, \$self, \@args);"
       . "}";
@@ -393,14 +380,11 @@ sub import {
     Coat->export_to_level(1, @_);
 }
 
-
-sub coat_init_class
-{
+sub coat_init_class {
     my ($class) = @_;
     $class = caller() unless defined $class;
     eval "push \@${class}::ISA, 'Coat'";
 }
-
 
 # We force the caller to inherit from us
 {
