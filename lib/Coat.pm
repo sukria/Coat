@@ -28,6 +28,7 @@ my $CLASS_ATTRS = {};
 sub class_attr { @_ == 3 ? 
     $CLASS_ATTRS->{$_[0]}{$_[1]} = $_[2] : 
     $CLASS_ATTRS->{$_[0]}{$_[1]} ||= {}}
+sub class { $CLASS_ATTRS->{$_[0]} ||= {} }
 
 # var() declares an attribute and builds the corresponding accessors
 sub var {
@@ -103,6 +104,7 @@ sub __build_sub_with_hook($$) {
     *${full_method} = sub {
         my ( $self, @args ) = @_;
         my @result;
+        my $result;
 
         if (@$before) {
             $_->(@_) for @$before;
@@ -111,21 +113,36 @@ sub __build_sub_with_hook($$) {
         if (@$around) {
             my $orig = \&$super_method;
             foreach my $hook (@$around) {
-                @result = $hook->( $orig, $self, @args );
+                if (wantarray) {
+                    @result = $hook->( $orig, $self, @args );
+                }
+                else {
+                    $result = $hook->( $orig, $self, @args );
+                }
                 $orig = $hook;
             }
         }
         else {
-            @result = &$super_method( $self, @args );
+            if (wantarray) {
+                @result = &$super_method( $self, @args );
+            }
+            else {
+                $result = &$super_method( $self, @args );
+            }
         }
 
         if (@$after) {
-            @result = $_->( $self, @result, @args ) for @$after;
+            if (wantarray) {
+                @result = $_->( $self, @result, @args ) for @$after;
+            }
+            else {
+                $result = $_->( $self, $result, @args ) for @$after;
+            }
         }
 
         wantarray
           ? return @result
-          : return $result[0];
+          : return $result;
     };
 }
 
@@ -303,24 +320,20 @@ sub __copy_class_description($$) {
 sub import {
     my $caller = caller;
 
+    # import strict and warnings
     strict->import;
     warnings->import;
+    
+    # delcare the class
+    class(__getscope());
+    
+    # forced inheritance to caller
+    eval "push \@${caller}::ISA, 'Coat'";
+    croak "Unable to inherit from Coat : $@" if $@;
 
     return if $caller eq 'main';
     Coat->export_to_level( 1, @_ );
 }
-
-sub coat_init_class {
-    my ($class) = @_;
-    $class = caller() unless defined $class;
-    eval "push \@${class}::ISA, 'Coat'";
-}
-
-# We force the caller to inherit from us
-{
-    my $caller = caller();
-    coat_init_class($caller);
-};
 
 1;
 __END__
