@@ -9,6 +9,8 @@ use Exporter;
 use base 'Exporter';
 use vars qw(@EXPORT $VERSION);
 
+use Coat::Object;
+
 # The current version of this library
 $VERSION = '0.1_0.2';
 
@@ -55,35 +57,38 @@ sub __copy_class_description($$) {
 # var() declares an attribute and builds the corresponding accessors
 sub var {
     my ( $name, %options ) = @_;
-    my $scope = __getscope();
+    my $scope = getscope();
     my $accessor = "${scope}::${name}";
 
     class_attr( $scope, $name, { type => 'Scalar', %options } );
     
-    no strict 'refs';
-    undef *${accessor} if defined *{accessor};
-    *${accessor} = sub {
-        my ($self, $value) = @_;
-        confess "Unknown attribute '$name' for class ".ref($self) unless 
-            $self->has($name);
-        
-        # want a set()
-        if (@_ > 1) { 
-            my $attrs = $self->attrs;
-            my $type  = $attrs->{$name}{type};
+    {
+        no strict 'refs';
+        undef *${accessor} if defined *{accessor};
+        *${accessor} = sub {
+            my ($self, $value) = @_;
+            confess "Unknown attribute '$name' for class ".ref($self) unless 
+                $self->has($name);
 
-            # FIXME : this will be better when we have Coat::Types implemented
-            confess "$type '$name' cannot be set to '$value'" unless 
-                ( __value_is_valid( $value, $type ) );
+            # want a set()
+            if (@_ > 1) { 
+                my $attrs = $self->attrs;
+                my $type  = $attrs->{$name}{type};
 
-            $self->{_values}{$name} = $value;
-            return $value;
-        }
-        # want a get()
-        else {
-            return  $self->{_values}{$name};
-        }
-    };
+                # FIXME : this will be better when we have Coat::Types implemented
+                confess "$type '$name' cannot be set to '$value'" unless 
+                    ( __value_is_valid( $value, $type ) );
+
+                $self->{_values}{$name} = $value;
+                return $value;
+            }
+            
+            # want a get()
+            else {
+                return  $self->{_values}{$name};
+            }
+        };
+    }
 }
 
 # this is where inheritance takes place
@@ -95,13 +100,13 @@ sub extends {
     confess "Class '$father' is unknown, cannot extends"
       unless class_exists($father);
 
-    my $class = __getscope();
+    my $class = getscope();
 
     # first we inherit the class description from our father
     __copy_class_description( $father, $class );
 
     # then we tell Perl we actually inherits from our father
-    eval "push \@${class}::ISA, '$father'";
+    { no strict 'refs'; @{"${class}::ISA"} = ($father); }
 
     # save the fact that $class inherits from $father
     class_set_father( $class, $father ); 
@@ -110,7 +115,7 @@ sub extends {
 # returns the parent class of the class given
 sub super {
     my ($class) = @_;
-    $class = __getscope() unless defined $class;
+    $class = getscope() unless defined $class;
     return class_get_father( $class );
 }
 
@@ -184,7 +189,7 @@ sub __build_sub_with_hook($$)
 # the code given before the inherited method is called.
 sub before {
     my ( $method, $code ) = @_;
-    my $class = __getscope();
+    my $class = getscope();
     __hooks_before_push( $class, $method, $code );
     __build_sub_with_hook( $class, $method );
 }
@@ -193,7 +198,7 @@ sub before {
 # the code after the inherited method is called
 sub after {
     my ( $method, $code ) = @_;
-    my $class = __getscope();
+    my $class = getscope();
     __hooks_after_push( $class, $method, $code );
     __build_sub_with_hook( $class, $method );
 }
@@ -203,65 +208,38 @@ sub after {
 # args, you play !
 sub around {
     my ( $method, $code ) = @_;
-    my $class = __getscope();
+    my $class = getscope();
     __hooks_around_push( $class, $method, $code );
     __build_sub_with_hook( $class, $method );
 }
 
-##############################################################################
-# Public instance methods
-##############################################################################
 
-# returns the attributes descriptions for the class of that instance
-sub attrs {
-    my ($self) = @_;
-    return class( __getscope($self) );
-}
+# we override the import method to actually force the "strict" and "warnings"
+# modes to children and also to force the Coat::Object inheritance.
+sub import {
+    my $caller = caller;
 
-# tells if the given attribute is delcared for the class of that instance
-sub has {
-    my ( $self, $var ) = @_;
-    return class_has_attr( __getscope($self), $var );
-}
+    # import strict and warnings
+    strict->import;
+    warnings->import;
+    
+    # delcare the class
+    class( getscope() );
+    
+    # forced inheritance to caller
+    { no strict 'refs'; @{"${caller}::ISA"} = ('Coat::Object'); }
 
-# init an instance : put default values and set values
-# given at instanciation time
-sub init {
-    my ( $self, %attrs ) = @_;
-
-    # default values
-    my $class_attr = $self->attrs;
-    foreach my $attr ( keys %{$class_attr} ) {
-        if ( defined $class_attr->{$attr}{default} ) {
-            $self->$attr( $class_attr->{$attr}{default} );
-        }
-    }
-
-    # forced values
-    foreach my $attr ( keys %attrs ) {
-        $self->$attr( $attrs{$attr} );
-    }
-}
-
-# The default constructor
-sub new {
-    my ( $class, %args ) = @_;
-
-    my $self = {};
-    bless $self, $class;
-
-    $self->init(%args);
-
-    return $self;
+    return if $caller eq 'main';
+    Coat->export_to_level( 1, @_ );
 }
 
 ##############################################################################
-# Private methods
+# Protected methods (only called from Coat::* friends)
 ##############################################################################
 
 # The scope is used for saving attribute properties, we want to have
 # one namespace per class that inherits from us
-sub __getscope {
+sub getscope {
     my ($self) = @_;
 
     if ( defined $self ) {
@@ -305,32 +283,6 @@ sub __value_is_valid($$) {
     else {
         return ref($value) eq $type;
     }
-}
-
-
-
-##############################################################################
-# Loading time cooking
-##############################################################################
-
-# we override the import method to actually force the "strict" and "warnings"
-# modes to children.
-sub import {
-    my $caller = caller;
-
-    # import strict and warnings
-    strict->import;
-    warnings->import;
-    
-    # delcare the class
-    class(__getscope());
-    
-    # forced inheritance to caller
-    eval "push \@${caller}::ISA, 'Coat'";
-    confess "Unable to inherit from Coat : $@" if $@;
-
-    return if $caller eq 'main';
-    Coat->export_to_level( 1, @_ );
 }
 
 1;

@@ -2,5 +2,6 @@ INSTALL
 CHANGES
 README
 lib/Coat.pm
+lib/Coat/Object.pm
 COPYING
 Makefile.PL
