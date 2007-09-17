@@ -25,13 +25,23 @@ my $CLASS_ATTRS = {};
 
 # public class methods
 
-# the var method is exported, it allows us to delcare attributes
-# for the class
-# default type is "scalar"
+# var() declares an attribute and builds the corresponding accessors
+sub class_attr { $CLASS_ATTRS->{$_[0]}{$_[1]} = $_[2] }
 sub var {
-    my ($name, %options) = @_;
+    my ( $name, %options ) = @_;
     my $scope = __getscope();
-    $CLASS_ATTRS->{$scope}{$name} = { type => 'Scalar', %options };
+    my $accessor = "${scope}::${name}";
+
+    class_attr( $scope, $name, { type => 'Scalar', %options } );
+    
+    no strict 'refs';
+    undef *${accessor} if defined *{accessor};
+    *${accessor} = sub {
+        my ($self, $value) = @_;
+        @_ > 1 ? 
+            return $self->set($name, $value) :
+            return $self->get($name);
+    };
 }
 
 # this is where inheritance takes place
@@ -46,7 +56,7 @@ sub extends {
     my $class = __getscope();
 
     # first we inherit the class description from our father
-    __copy_class_description($father, $class);
+    __copy_class_description( $father, $class );
 
     # then we tell Perl we actually inherits from our father
     eval "push \@${class}::ISA, '$father'";
@@ -67,12 +77,12 @@ sub hooks_before { $CLASS_ATTRS->{__hooks}{ $_[0] }{before}{ $_[1] } ||= [] }
 sub hooks_after  { $CLASS_ATTRS->{__hooks}{ $_[0] }{after}{ $_[1] } ||= [] }
 sub hooks_around { $CLASS_ATTRS->{__hooks}{ $_[0] }{around}{ $_[1] } ||= [] }
 
-sub __hooks_before_push { push @{ hooks_before($_[0], $_[1]) }, $_[2] }
-sub __hooks_after_push { push @{ hooks_after($_[0], $_[1]) }, $_[2] }
-sub __hooks_around_push { push @{ hooks_around($_[0], $_[1]) }, $_[2] }
+sub __hooks_before_push { push @{ hooks_before( $_[0], $_[1] ) }, $_[2] }
+sub __hooks_after_push { push @{ hooks_after( $_[0], $_[1] ) }, $_[2] }
+sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
 
 sub __build_sub_with_hook($$) {
-    my ($class, $method) = @_;
+    my ( $class, $method ) = @_;
 
     my $super        = super($class);
     my $super_method = "${super}::${method}";
@@ -81,14 +91,14 @@ sub __build_sub_with_hook($$) {
     no strict 'refs';
     undef *${full_method};
 
-    my ($before, $after, $around) = (
-        hooks_before($class, $method),
-        hooks_after($class, $method),
-        hooks_around($class, $method)
+    my ( $before, $after, $around ) = (
+        hooks_before( $class, $method ),
+        hooks_after( $class, $method ),
+        hooks_around( $class, $method )
     );
 
     *${full_method} = sub {
-        my ($self, @args) = @_;
+        my ( $self, @args ) = @_;
         my @result;
 
         if (@$before) {
@@ -98,16 +108,16 @@ sub __build_sub_with_hook($$) {
         if (@$around) {
             my $orig = \&$super_method;
             foreach my $hook (@$around) {
-                @result = $hook->($orig, $self, @args);
+                @result = $hook->( $orig, $self, @args );
                 $orig = $hook;
             }
         }
         else {
-            @result = &$super_method($self, @args);
+            @result = &$super_method( $self, @args );
         }
 
         if (@$after) {
-            @result = $_->($self, @result, @args) for @$after;
+            @result = $_->( $self, @result, @args ) for @$after;
         }
 
         wantarray
@@ -119,29 +129,29 @@ sub __build_sub_with_hook($$) {
 # the before hook catches the call to an inherited method and exectue
 # the code given before the inherited method is called.
 sub before {
-    my ($method, $code) = @_;
+    my ( $method, $code ) = @_;
     my $class = __getscope();
-    __hooks_before_push($class, $method, $code);
-    __build_sub_with_hook($class, $method);
+    __hooks_before_push( $class, $method, $code );
+    __build_sub_with_hook( $class, $method );
 }
 
 # the after hook catches the call to an inherited method and executes
 # the code after the inherited method is called
 sub after {
-    my ($method, $code) = @_;
+    my ( $method, $code ) = @_;
     my $class = __getscope();
-    __hooks_after_push($class, $method, $code);
-    __build_sub_with_hook($class, $method);
+    __hooks_after_push( $class, $method, $code );
+    __build_sub_with_hook( $class, $method );
 }
 
 # the around hook catches the call to an inherited method and lets you do
 # whatever you want with it, you get the coderef of the parent method and the
 # args, you play !
 sub around {
-    my ($method, $code) = @_;
+    my ( $method, $code ) = @_;
     my $class = __getscope();
-    __hooks_around_push($class, $method, $code);
-    __build_sub_with_hook($class, $method);
+    __hooks_around_push( $class, $method, $code );
+    __build_sub_with_hook( $class, $method );
 }
 
 ##############################################################################
@@ -156,32 +166,32 @@ sub attrs {
 
 # tells if the given attribute is delcared for the class of that instance
 sub has {
-    my ($self, $var) = @_;
+    my ( $self, $var ) = @_;
     return exists $CLASS_ATTRS->{ __getscope($self) }{$var};
 }
 
 # init an instance : put default values and set values
 # given at instanciation time
 sub init {
-    my ($self, %attrs) = @_;
+    my ( $self, %attrs ) = @_;
 
     # default values
     my $class_attr = $self->attrs;
-    foreach my $attr (keys %{$class_attr}) {
-        if (defined $class_attr->{$attr}{default}) {
-            $self->set($attr, $class_attr->{$attr}{default});
+    foreach my $attr ( keys %{$class_attr} ) {
+        if ( defined $class_attr->{$attr}{default} ) {
+            $self->set( $attr, $class_attr->{$attr}{default} );
         }
     }
 
     # forced values
-    foreach my $attr (keys %attrs) {
-        $self->set($attr, $attrs{$attr});
+    foreach my $attr ( keys %attrs ) {
+        $self->set( $attr, $attrs{$attr} );
     }
 }
 
 # The default constructor
 sub new {
-    my ($class, %args) = @_;
+    my ( $class, %args ) = @_;
 
     my $self = {};
     bless $self, $class;
@@ -193,8 +203,8 @@ sub new {
 
 # accessors for the instance attributes : set
 sub set {
-    my ($self, $attr, $value) = @_;
-    unless ($self->has($attr)) {
+    my ( $self, $attr, $value ) = @_;
+    unless ( $self->has($attr) ) {
         croak "Unknown attribute '$attr' for class "
           . ref($self)
           . ", cannot set";
@@ -203,7 +213,7 @@ sub set {
     # check the attribute's value match its type
     my $attrs = $self->attrs;
     my $type  = $attrs->{$attr}{type};
-    unless (__value_is_valid($value, $type)) {
+    unless ( __value_is_valid( $value, $type ) ) {
         croak "$type '$attr' cannot be set to '$value'";
     }
 
@@ -213,39 +223,13 @@ sub set {
 
 # accessors for the instance attributes : get
 sub get {
-    my ($self, $attr) = @_;
-    unless ($self->has($attr)) {
+    my ( $self, $attr ) = @_;
+    unless ( $self->has($attr) ) {
         croak "Unknown attribute '$attr' for class "
           . ref($self)
           . ", cannot get";
     }
     return $self->{_values}{$attr};
-}
-
-# some AUTOLOAD magic to build dynamic accessors for each attribute
-sub AUTOLOAD {
-    my ($self, @args) = @_;
-
-    our $AUTOLOAD;
-    my @tokens = split('::', $AUTOLOAD);
-    my $method = $tokens[$#tokens];
-    return 1 if $method eq 'DESTROY';
-
-    # do we ask for an accessor?
-    if ($self->has($method)) {
-        my ($value) = @args;
-        if (defined $value) {
-            return $self->set($method, $value);
-        }
-        else {
-            return $self->get($method);
-        }
-    }
-
-    else {
-        croak "unknown method '$method' for class '" . ref($self) . "'";
-    }
-
 }
 
 ##############################################################################
@@ -257,17 +241,17 @@ sub AUTOLOAD {
 sub __getscope {
     my ($self) = @_;
 
-    if (defined $self) {
+    if ( defined $self ) {
         return ref($self);
     }
     else {
-        return (scalar(caller(1)));
+        return ( scalar( caller(1) ) );
     }
 }
 
 # check the attributes integrity
 sub __value_is_valid($$) {
-    my ($value, $type) = @_;
+    my ( $value, $type ) = @_;
     return 1 if $type eq 'Scalar';
 
     my $lexical_rules = {
@@ -276,21 +260,21 @@ sub __value_is_valid($$) {
         Boolean => '^[01]$',
     };
 
-    if (defined $lexical_rules->{$type}) {
+    if ( defined $lexical_rules->{$type} ) {
         my $pattern = $lexical_rules->{$type};
         return $value =~ /$pattern/;
     }
 
     # refs
-    elsif ($type eq 'ArrayRef') {
+    elsif ( $type eq 'ArrayRef' ) {
         return ref($value) eq 'ARRAY';
     }
 
-    elsif ($type eq 'HashRef') {
+    elsif ( $type eq 'HashRef' ) {
         return ref($value) eq 'HASH';
     }
 
-    elsif ($type eq 'CodeRef') {
+    elsif ( $type eq 'CodeRef' ) {
         return ref($value) eq 'CODE';
     }
 
@@ -301,8 +285,8 @@ sub __value_is_valid($$) {
 }
 
 sub __copy_class_description($$) {
-    my ($source, $dest) = @_;
-    foreach my $key (keys %{ $CLASS_ATTRS->{$source} }) {
+    my ( $source, $dest ) = @_;
+    foreach my $key ( keys %{ $CLASS_ATTRS->{$source} } ) {
         $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
     }
 }
@@ -314,7 +298,7 @@ sub __copy_class_description($$) {
 
 # builds the code for getting the father package
 sub __hook_call_father {
-    my ($class, $method) = @_;
+    my ( $class, $method ) = @_;
     my $code = "
         my \$father = Coat::super('$class');
         croak \"Unknown father for class '$class'\" unless defined \$father;";
@@ -324,12 +308,12 @@ sub __hook_call_father {
 # builds the sub resulting of a "before" hook (first call the code given in the
 # hook, then call the father's method and returns its result)
 sub __hook_build_before {
-    my ($class, $method) = @_;
+    my ( $class, $method ) = @_;
     my $code =
         "sub ${class}::$method \n" . "{\n"
       . "my (\$self, \@args) = \@_; \n"
       . "&{\$CLASS_ATTRS->{__hooks}{$class}{before}{$method}}(\$self, \@args);"
-      . __hook_call_father($class, $method) . "\n"
+      . __hook_call_father( $class, $method ) . "\n"
       . "return eval(\"\${father}::$method(\".'\$self, \@args)');" . "}";
     return $code;
 }
@@ -338,11 +322,11 @@ sub __hook_build_before {
 # returns the result of the code given in the hook, passing to it te father's
 # result.)
 sub __hook_build_after {
-    my ($class, $method) = @_;
+    my ( $class, $method ) = @_;
     my $code =
         "sub ${class}::$method \n" . "{\n"
       . "my (\$self, \@args) = \@_; \n"
-      . __hook_call_father($class, $method) . "\n"
+      . __hook_call_father( $class, $method ) . "\n"
       . "my \@res = eval(\"\${father}::$method(\".'\$self, \@args)');"
       . "return &{\$CLASS_ATTRS->{__hooks}{$class}{after}{$method}}(\$self, \@res, \@args);"
       . "}";
@@ -353,11 +337,11 @@ sub __hook_build_after {
 # father's method, then call the code given to the hook, passing to it the
 # coderef)
 sub __hook_build_around {
-    my ($class, $method) = @_;
+    my ( $class, $method ) = @_;
     my $code =
         "sub ${class}::$method \n" . "{\n"
       . "my (\$self, \@args) = \@_; \n"
-      . __hook_call_father($class, $method) . "\n"
+      . __hook_call_father( $class, $method ) . "\n"
       . "my \$orig = eval(\"\\\\&\${father}::$method\");"
       . "return &{\$CLASS_ATTRS->{__hooks}{$class}{around}{$method}}(\$orig, \$self, \@args);"
       . "}";
@@ -377,7 +361,7 @@ sub import {
     warnings->import;
 
     return if $caller eq 'main';
-    Coat->export_to_level(1, @_);
+    Coat->export_to_level( 1, @_ );
 }
 
 sub coat_init_class {
