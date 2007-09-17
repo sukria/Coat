@@ -30,7 +30,6 @@ sub reverse
 sub add
 {
     my ($self, $number) = @_;
-    print "# dans Builder::add ($self, $number)\n";
     return $self->number($self->number + $number);
 }
 
@@ -79,7 +78,6 @@ around 'hello' => sub {
 around 'add' => sub {
     my $orig = shift;
     my ($self, $value) = @_;
-    print "# dans Fuzzer::add ($orig, $self, $value)\n";
     my $val = $self->$orig($value);
     return $val + $value;
 };

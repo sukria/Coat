@@ -23,12 +23,34 @@ $VERSION = '0.1';
 # it's present in scope of the class itself, not for each instance
 my $CLASS_ATTRS = {};
 
-# public class methods
+# local accessors for class attributes/descriptions
 
+# declare/get a class description
+sub class { $CLASS_ATTRS->{$_[0]} ||= {} }
+
+# set/get an attribute of a class
 sub class_attr { @_ == 3 ? 
     $CLASS_ATTRS->{$_[0]}{$_[1]} = $_[2] : 
     $CLASS_ATTRS->{$_[0]}{$_[1]} ||= {}}
-sub class { $CLASS_ATTRS->{$_[0]} ||= {} }
+
+sub class_exists     { exists $CLASS_ATTRS->{$_[0]}            } 
+sub class_has_attr   { exists $CLASS_ATTRS->{$_[0]}{$_[1]}     }
+sub class_set_father { $CLASS_ATTRS->{__father}{$_[0]} = $_[1] }
+sub class_get_father { $CLASS_ATTRS->{__father}{$_[0]}         }
+
+# hooks for a module
+sub hooks        { $CLASS_ATTRS->{__hooks}{ $_[0] } }
+sub hooks_before { $CLASS_ATTRS->{__hooks}{ $_[0] }{before}{ $_[1] } ||= [] }
+sub hooks_after  { $CLASS_ATTRS->{__hooks}{ $_[0] }{after}{ $_[1] } ||= [] }
+sub hooks_around { $CLASS_ATTRS->{__hooks}{ $_[0] }{around}{ $_[1] } ||= [] }
+
+# helper for copying a class description (used when inheriting from a class)
+sub __copy_class_description($$) {
+    my ( $source, $dest ) = @_;
+    foreach my $key ( keys %{ $CLASS_ATTRS->{$source} } ) {
+        $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
+    }
+}
 
 # var() declares an attribute and builds the corresponding accessors
 sub var {
@@ -55,7 +77,7 @@ sub extends {
       unless defined $father;
 
     croak "Class '$father' is unknown, cannot extends"
-      unless exists $CLASS_ATTRS->{$father};
+      unless class_exists($father);
 
     my $class = __getscope();
 
@@ -66,26 +88,22 @@ sub extends {
     eval "push \@${class}::ISA, '$father'";
 
     # save the fact that $class inherits from $father
-    $CLASS_ATTRS->{__father}{$class} = $father;
+    class_set_father( $class, $father ); 
 }
 
 # returns the parent class of the class given
 sub super {
     my ($class) = @_;
     $class = __getscope() unless defined $class;
-    return $CLASS_ATTRS->{__father}{$class};
+    return class_get_father( $class );
 }
 
-sub hooks        { $CLASS_ATTRS->{__hooks}{ $_[0] } }
-sub hooks_before { $CLASS_ATTRS->{__hooks}{ $_[0] }{before}{ $_[1] } ||= [] }
-sub hooks_after  { $CLASS_ATTRS->{__hooks}{ $_[0] }{after}{ $_[1] } ||= [] }
-sub hooks_around { $CLASS_ATTRS->{__hooks}{ $_[0] }{around}{ $_[1] } ||= [] }
-
+# local helpers for building wrapped methods
 sub __hooks_before_push { push @{ hooks_before( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_after_push { push @{ hooks_after( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
-
-sub __build_sub_with_hook($$) {
+sub __build_sub_with_hook($$) 
+{
     my ( $class, $method ) = @_;
 
     my $super        = super($class);
@@ -181,13 +199,13 @@ sub around {
 # returns the attributes descriptions for the class of that instance
 sub attrs {
     my ($self) = @_;
-    return $CLASS_ATTRS->{ __getscope($self) };
+    return class( __getscope($self) );
 }
 
 # tells if the given attribute is delcared for the class of that instance
 sub has {
     my ( $self, $var ) = @_;
-    return exists $CLASS_ATTRS->{ __getscope($self) }{$var};
+    return class_has_attr( __getscope($self), $var );
 }
 
 # init an instance : put default values and set values
@@ -304,12 +322,7 @@ sub __value_is_valid($$) {
     }
 }
 
-sub __copy_class_description($$) {
-    my ( $source, $dest ) = @_;
-    foreach my $key ( keys %{ $CLASS_ATTRS->{$source} } ) {
-        $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
-    }
-}
+
 
 ##############################################################################
 # Loading time cooking
