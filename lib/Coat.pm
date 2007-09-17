@@ -3,7 +3,7 @@ package Coat;
 use strict;
 use warnings;
 
-use Carp;
+use Carp 'confess';
 
 use Exporter;
 use base 'Exporter';
@@ -64,7 +64,7 @@ sub var {
     undef *${accessor} if defined *{accessor};
     *${accessor} = sub {
         my ($self, $value) = @_;
-        croak "Unknown attribute '$name' for class ".ref($self) unless 
+        confess "Unknown attribute '$name' for class ".ref($self) unless 
             $self->has($name);
         
         # want a set()
@@ -73,7 +73,7 @@ sub var {
             my $type  = $attrs->{$name}{type};
 
             # FIXME : this will be better when we have Coat::Types implemented
-            croak "$type '$name' cannot be set to '$value'" unless 
+            confess "$type '$name' cannot be set to '$value'" unless 
                 ( __value_is_valid( $value, $type ) );
 
             $self->{_values}{$name} = $value;
@@ -89,10 +89,10 @@ sub var {
 # this is where inheritance takes place
 sub extends {
     my ($father) = @_;
-    croak "Cannot extend without a class name"
+    confess "Cannot extend without a class name"
       unless defined $father;
 
-    croak "Class '$father' is unknown, cannot extends"
+    confess "Class '$father' is unknown, cannot extends"
       unless class_exists($father);
 
     my $class = __getscope();
@@ -327,7 +327,7 @@ sub import {
     
     # forced inheritance to caller
     eval "push \@${caller}::ISA, 'Coat'";
-    croak "Unable to inherit from Coat : $@" if $@;
+    confess "Unable to inherit from Coat : $@" if $@;
 
     return if $caller eq 'main';
     Coat->export_to_level( 1, @_ );
