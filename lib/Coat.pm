@@ -25,8 +25,11 @@ my $CLASS_ATTRS = {};
 
 # public class methods
 
+sub class_attr { @_ == 3 ? 
+    $CLASS_ATTRS->{$_[0]}{$_[1]} = $_[2] : 
+    $CLASS_ATTRS->{$_[0]}{$_[1]} ||= {}}
+
 # var() declares an attribute and builds the corresponding accessors
-sub class_attr { $CLASS_ATTRS->{$_[0]}{$_[1]} = $_[2] }
 sub var {
     my ( $name, %options ) = @_;
     my $scope = __getscope();
@@ -289,63 +292,6 @@ sub __copy_class_description($$) {
     foreach my $key ( keys %{ $CLASS_ATTRS->{$source} } ) {
         $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
     }
-}
-
-# The following __hook_* stuff is about building methods dynamically
-# in the scope of the class.
-# The resulting method will mix the hook and the parent method to fit
-# was is asked.
-
-# builds the code for getting the father package
-sub __hook_call_father {
-    my ( $class, $method ) = @_;
-    my $code = "
-        my \$father = Coat::super('$class');
-        croak \"Unknown father for class '$class'\" unless defined \$father;";
-    return $code;
-}
-
-# builds the sub resulting of a "before" hook (first call the code given in the
-# hook, then call the father's method and returns its result)
-sub __hook_build_before {
-    my ( $class, $method ) = @_;
-    my $code =
-        "sub ${class}::$method \n" . "{\n"
-      . "my (\$self, \@args) = \@_; \n"
-      . "&{\$CLASS_ATTRS->{__hooks}{$class}{before}{$method}}(\$self, \@args);"
-      . __hook_call_father( $class, $method ) . "\n"
-      . "return eval(\"\${father}::$method(\".'\$self, \@args)');" . "}";
-    return $code;
-}
-
-# builds the sub resulting of an "after" hook (call the father's method, then
-# returns the result of the code given in the hook, passing to it te father's
-# result.)
-sub __hook_build_after {
-    my ( $class, $method ) = @_;
-    my $code =
-        "sub ${class}::$method \n" . "{\n"
-      . "my (\$self, \@args) = \@_; \n"
-      . __hook_call_father( $class, $method ) . "\n"
-      . "my \@res = eval(\"\${father}::$method(\".'\$self, \@args)');"
-      . "return &{\$CLASS_ATTRS->{__hooks}{$class}{after}{$method}}(\$self, \@res, \@args);"
-      . "}";
-    return $code;
-}
-
-# builds the sub resulting of an "around" method (gets the coderef of the
-# father's method, then call the code given to the hook, passing to it the
-# coderef)
-sub __hook_build_around {
-    my ( $class, $method ) = @_;
-    my $code =
-        "sub ${class}::$method \n" . "{\n"
-      . "my (\$self, \@args) = \@_; \n"
-      . __hook_call_father( $class, $method ) . "\n"
-      . "my \$orig = eval(\"\\\\&\${father}::$method\");"
-      . "return &{\$CLASS_ATTRS->{__hooks}{$class}{around}{$method}}(\$orig, \$self, \@args);"
-      . "}";
-    return $code;
 }
 
 ##############################################################################
