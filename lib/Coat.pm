@@ -69,7 +69,6 @@ sub var {
         
         # want a set()
         if (@_ > 1) { 
-            # for performance reasons, we don't use $self->set_value here
             my $attrs = $self->attrs;
             my $type  = $attrs->{$name}{type};
 
@@ -234,13 +233,13 @@ sub init {
     my $class_attr = $self->attrs;
     foreach my $attr ( keys %{$class_attr} ) {
         if ( defined $class_attr->{$attr}{default} ) {
-            $self->set_value( $attr, $class_attr->{$attr}{default} );
+            $self->$attr( $class_attr->{$attr}{default} );
         }
     }
 
     # forced values
     foreach my $attr ( keys %attrs ) {
-        $self->set_value( $attr, $attrs{$attr} );
+        $self->$attr( $attrs{$attr} );
     }
 }
 
@@ -254,31 +253,6 @@ sub new {
     $self->init(%args);
 
     return $self;
-}
-
-sub set_value
-{
-    my ($self, $name, $value) = @_;
-    my $attrs = $self->attrs;
-    my $type  = $attrs->{$name}{type};
-    
-    # FIXME : this will be better when we have Coat::Types implemented
-    croak "$type '$name' cannot be set to '$value'" unless 
-        ( __value_is_valid( $value, $type ) );
-
-    $self->{_values}{$name} = $value;
-    return $value;
-}
-
-# accessors for the instance attributes : get
-sub get_value {
-    my ( $self, $attr ) = @_;
-    unless ( $self->has($attr) ) {
-        croak "Unknown attribute '$attr' for class "
-          . ref($self)
-          . ", cannot get";
-    }
-    return $self->{_values}{$attr};
 }
 
 ##############################################################################
