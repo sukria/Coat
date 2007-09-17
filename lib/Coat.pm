@@ -10,7 +10,7 @@ use base 'Exporter';
 use vars qw(@EXPORT $VERSION);
 
 # The current version of this library
-$VERSION = '0.1';
+$VERSION = '0.1_0.2';
 
 # our exported keywords for class description
 @EXPORT = qw(var extends before after around);
@@ -64,9 +64,26 @@ sub var {
     undef *${accessor} if defined *{accessor};
     *${accessor} = sub {
         my ($self, $value) = @_;
-        @_ > 1 ? 
-            return $self->set($name, $value) :
-            return $self->get($name);
+        croak "Unknown attribute '$name' for class ".ref($self) unless 
+            $self->has($name);
+        
+        # want a set()
+        if (@_ > 1) { 
+            # for performance reasons, we don't use $self->set_value here
+            my $attrs = $self->attrs;
+            my $type  = $attrs->{$name}{type};
+
+            # FIXME : this will be better when we have Coat::Types implemented
+            croak "$type '$name' cannot be set to '$value'" unless 
+                ( __value_is_valid( $value, $type ) );
+
+            $self->{_values}{$name} = $value;
+            return $value;
+        }
+        # want a get()
+        else {
+            return  $self->{_values}{$name};
+        }
     };
 }
 
@@ -217,13 +234,13 @@ sub init {
     my $class_attr = $self->attrs;
     foreach my $attr ( keys %{$class_attr} ) {
         if ( defined $class_attr->{$attr}{default} ) {
-            $self->set( $attr, $class_attr->{$attr}{default} );
+            $self->set_value( $attr, $class_attr->{$attr}{default} );
         }
     }
 
     # forced values
     foreach my $attr ( keys %attrs ) {
-        $self->set( $attr, $attrs{$attr} );
+        $self->set_value( $attr, $attrs{$attr} );
     }
 }
 
@@ -239,28 +256,22 @@ sub new {
     return $self;
 }
 
-# accessors for the instance attributes : set
-sub set {
-    my ( $self, $attr, $value ) = @_;
-    unless ( $self->has($attr) ) {
-        croak "Unknown attribute '$attr' for class "
-          . ref($self)
-          . ", cannot set";
-    }
-
-    # check the attribute's value match its type
+sub set_value
+{
+    my ($self, $name, $value) = @_;
     my $attrs = $self->attrs;
-    my $type  = $attrs->{$attr}{type};
-    unless ( __value_is_valid( $value, $type ) ) {
-        croak "$type '$attr' cannot be set to '$value'";
-    }
+    my $type  = $attrs->{$name}{type};
+    
+    # FIXME : this will be better when we have Coat::Types implemented
+    croak "$type '$name' cannot be set to '$value'" unless 
+        ( __value_is_valid( $value, $type ) );
 
-    $self->{_values}{$attr} = $value;
+    $self->{_values}{$name} = $value;
     return $value;
 }
 
 # accessors for the instance attributes : get
-sub get {
+sub get_value {
     my ( $self, $attr ) = @_;
     unless ( $self->has($attr) ) {
         croak "Unknown attribute '$attr' for class "

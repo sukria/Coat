@@ -1,3 +1,10 @@
+2007-09-17 -- release 0.1_0.2 -- Alexis Sukrieh
+
+    * development version, according to Perl versionning conventions.
+    * Rewrite of all the hooks handling with closures instead of evals
+    * Don't use AUTOLOAD anymore for accessors, declare closures as well.
+    * Lots of Cleaning
+
 2007-09-14 -- release 0.1 -- Alexis Sukrieh
 
   * Initial release
