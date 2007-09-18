@@ -122,21 +122,6 @@ sub __hooks_before_push { push @{ hooks_before( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_after_push { push @{ hooks_after( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
 
-sub __get_around_orig($);
-sub __get_around_orig($)
-{
-    my ($around) = @_;
-    return unless @$around;
-
-    if (@$around == 1) {
-        return pop @$around;
-    }
-    else {
-        my $code = pop @$around;
-        return \&$code->(__get_around_orig($around));
-    }
-}
-
 # The idea here is to loop on each coderef given
 # and build subs to ensure the orif is correctly propagated 
 # eg: we rewrite the "around" hooks  defined to pass their coderef neighboor
