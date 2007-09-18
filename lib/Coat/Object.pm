@@ -23,7 +23,7 @@ sub attrs {
 }
 
 # tells if the given attribute is delcared for the class of that instance
-sub has {
+sub has_attr {
     my ( $self, $var ) = @_;
     return Coat::class_has_attr( ref( $self ), $var );
 }
@@ -47,7 +47,36 @@ sub init {
     }
 }
 
+
 # end Coat::Object
 1;
 __END__
 
+=head1 NAME
+
+Coat::Object - The mother class for each class that uses Coat
+
+=head1 DESCRIPTION
+
+=head1 METHODS
+
+=head1 SEE ALSO
+
+=head1 AUTHORS
+
+This module was written by Alexis Sukrieh E<lt>sukria+perl@sukria.netE<gt>
+
+Strong and helpful reviews were made by Stevan Little and 
+Matt (mst) Trout ; this module wouldn't be there without their help.
+Huge thank to them.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2007 by Alexis Sukrieh.
+
+L<http://www.sukria.net/perl/coat/>
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 
+
+=cut

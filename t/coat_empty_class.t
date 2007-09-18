@@ -16,7 +16,7 @@ use warnings;
     package Baz;
     use Coat;
 
-    var 'x';
+    has 'x';
 }
 
 ok(eval { extends Foo::; 1 }, 'completely empty'."- $@");

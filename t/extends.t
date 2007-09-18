@@ -6,15 +6,15 @@ package Point;
 
 use Coat;
 
-var 'x' => ( type => 'Int', default => 0);
-var 'y' => ( type => 'Int', default => 0);
+has 'x' => ( type => 'Int', default => 0);
+has 'y' => ( type => 'Int', default => 0);
 
 package Point3D;
 
 use Coat;
 extends 'Point';
 
-var 'z' => ( type => 'Int', default => 0);
+has 'z' => ( type => 'Int', default => 0);
 
 # test
 
@@ -31,10 +31,10 @@ my $point3d = new Point3D x => 1, y => 3, z => 1;
 ok( defined $point3d, 'new Point3D' );
 
 # make sure the father didn't get any attribute property of his son
-ok( ( ! $point2d->has('z')), "! \$point2d->can('z')" );
+ok( ( ! $point2d->has_attr('z')), "! \$point2d->can('z')" );
 
 # make sure the son can actually use its particularity
-ok( ( $point3d->has('z')), "\$point3d->can('z')" );
+ok( ( $point3d->has_attr('z')), "\$point3d->can('z')" );
 
 # now play with attributes
 ok( $point3d->x(3), '$point3d->x(3)' );

@@ -2,24 +2,20 @@ package Coat;
 
 use strict;
 use warnings;
-
 use Carp 'confess';
 
 use Exporter;
 use base 'Exporter';
-use vars qw(@EXPORT $VERSION);
+use vars qw(@EXPORT $VERSION $AUTHORITY);
 
+# This is the mother class for each class that uses Coat
 use Coat::Object;
 
-# The current version of this library
-$VERSION = '0.1_0.2';
+$VERSION   = '0.1_0.2';
+$AUTHORITY = 'cpan:SUKRIA';
 
 # our exported keywords for class description
-@EXPORT = qw(var extends before after around);
-
-##############################################################################
-# Static declarations  (scope of the class)
-##############################################################################
+@EXPORT = qw(has extends before after around);
 
 # This is the class placeholder for attribute descriptions
 # it's present in scope of the class itself, not for each instance
@@ -54,9 +50,11 @@ sub __copy_class_description($$) {
     }
 }
 
-# var() declares an attribute and builds the corresponding accessors
-sub var {
-    my ( $name, %options ) = @_;
+# has() declares an attribute and builds the corresponding accessors
+sub has {
+    my ($name, %options) = @_;
+    confess "Attribute is a reference, cannot declare" if ref($name);
+
     my $scope = getscope();
     my $accessor = "${scope}::${name}";
 
@@ -64,11 +62,11 @@ sub var {
     
     {
         no strict 'refs';
-        undef *${accessor} if defined *{accessor};
+        undef *${accessor} if defined *${accessor};
         *${accessor} = sub {
             my ($self, $value) = @_;
             confess "Unknown attribute '$name' for class ".ref($self) unless 
-                $self->has($name);
+                $self->has_attr($name);
 
             # want a set()
             if (@_ > 1) { 
@@ -123,6 +121,42 @@ sub super {
 sub __hooks_before_push { push @{ hooks_before( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_after_push { push @{ hooks_after( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
+
+sub __get_around_orig($);
+sub __get_around_orig($)
+{
+    my ($around) = @_;
+    return unless @$around;
+
+    if (@$around == 1) {
+        return pop @$around;
+    }
+    else {
+        my $code = pop @$around;
+        return \&$code->(__get_around_orig($around));
+    }
+}
+
+# The idea here is to loop on each coderef given
+# and build subs to ensure the orif is correctly propagated 
+# eg: we rewrite the "around" hooks  defined to pass their coderef neighboor
+# bug thank to Class::MOP here, which was helpful with the idea of
+# $compile_around_method
+sub __compile_around_modifier
+{
+    {
+        my $orig = shift;
+        return $orig unless @_;
+
+        my $hook = shift;
+        @_ = (sub { $hook->($orig, @_) }, @_);
+        redo;
+    }
+
+}
+
+# this one is the wrapper builder for method with hooks.
+# It can mix up before, after and around hooks.
 sub __build_sub_with_hook($$) 
 {
     my ( $class, $method ) = @_;
@@ -135,53 +169,30 @@ sub __build_sub_with_hook($$)
     undef *${full_method};
 
     my ( $before, $after, $around ) = (
-        hooks_before( $class, $method ),
-        hooks_after( $class, $method ),
-        hooks_around( $class, $method )
-    );
+            hooks_before( $class, $method ),
+            hooks_after( $class, $method ),
+            hooks_around( $class, $method ));
 
     *${full_method} = sub {
         my ( $self, @args ) = @_;
         my @result;
         my $result;
 
-        if (@$before) {
-            $_->(@_) for @$before;
-        }
+        $_->(@_) for @$before;
 
-        if (@$around) {
-            my $orig = \&$super_method;
-            foreach my $hook (@$around) {
-                if (wantarray) {
-                    @result = $hook->( $orig, $self, @args );
-                }
-                else {
-                    $result = $hook->( $orig, $self, @args );
-                }
-                $orig = $hook;
-            }
-        }
-        else {
-            if (wantarray) {
-                @result = &$super_method( $self, @args );
-            }
-            else {
-                $result = &$super_method( $self, @args );
-            }
-        }
+        my $around_modifier = __compile_around_modifier(
+                \&$super_method, @$around);
+        
+        (defined wantarray) 
+            ? (wantarray 
+                ? (@result = $around_modifier->(@_))
+                : ($result = $around_modifier->(@_)))
+            : ($around_modifier->(@_));
 
-        if (@$after) {
-            if (wantarray) {
-                @result = $_->( $self, @result, @args ) for @$after;
-            }
-            else {
-                $result = $_->( $self, $result, @args ) for @$after;
-            }
-        }
+        $_->(@_) for @$after;
 
-        wantarray
-          ? return @result
-          : return $result;
+        return unless defined wantarray;
+        return wantarray ? @result : $result;
     };
 }
 
@@ -250,6 +261,11 @@ sub getscope {
     }
 }
 
+
+##############################################################################
+# Private methods (only called from Coat.pm)
+##############################################################################
+
 # check the attributes integrity
 sub __value_is_valid($$) {
     my ( $value, $type ) = @_;
@@ -292,35 +308,46 @@ __END__
 
 =head1 NAME
 
-Coat -- a meta class for building light objects with accessors
+Coat -- A light and self-dependant meta-class for Perl5
 
 =head1 DESCRIPTION
 
 This module was inspired by the excellent Moose meta class which provides
-enhanced object creation for Perl 5.
+enhanced object creation for Perl5.
 
-Moose is great, but slow and has huge dependencies which makes it difficult to
+Moose is great, but has huge dependencies which makes it difficult to
 use in restricted environments.
 
-This module implements the basic goodness of Moose, namely the accessor
-automagic. 
+This module implements the basic goodness of Moose, namely accessors
+automagic, hook modifiers and inheritance facilities. 
 
-B<It is not Moose>
-
-It is designed for developers who want to write clean object code with Perl 5
-without depending on Moose. This implies you don't rely on all the features of
-Moose; and you don't depend on a huge set of dependencies, all you have to
-install is Coat (which is independant, no need of external modules).
+B<It is not Moose> but the small bunch of features provided are
+B<Moose-compatible>. That means you can start with Coat and, if later you
+get to the point where you can or want to upgrade to Moose, your code won't
+have to change : every features provided by Coat exist in the Moose's API.
 
 =head1 SYNTAX
 
+When you define a class with C<Coat> (eg: use Coat;), you declare a class that
+inherits from the main C<Coat> mother-class: C<Coat::Object>. C<Coat> is the
+meta-class, C<Coat::Object> is the mother-class. 
+
+The meta-class will help you define the class itself (inheritance, attributes,
+method modifiers) and the mother-class will provide to your class a set of
+default instance-methods such as a constructor and default accessors for your
+attributes.
+
+Here is a basic example with a class "Point": 
+
     package Point;
     use Coat;  # once the use is done, the class already 
-               # inherits from it
+               # inherits from Coat::Object, the mother-class.
 
-    var 'x' => (type => 'Int', default => 0);
-    var 'y' => (type => 'Int', default => 0);
+    # describe attributes...
+    has 'x' => (type => 'Int', default => 0);
+    has 'y' => (type => 'Int', default => 0);
 
+    # and your done
     1;
 
     my $point = new Point x => 2, y => 4;
@@ -328,47 +355,16 @@ install is Coat (which is independant, no need of external modules).
     $point->y;    # returns 4
     $point->x(9); # returns 9
 
-Note that we don't need to import "strict" and "warnings" modules as
-Coat propagates them to our class (use strict and use warnings are
-implicit in our class).
+Note that there's no need to import the "strict" and "warnings" modules, it's
+already exported by Coat when you use it.
 
 =head1 STATIC METHODS
 
-=head2 var 'name' => %options
+Coat provides you with static methods you use to define your class.
+They're respectingly dedicated to declare attributes, define method modifiers
+(hooks) and set inheritance.
 
-The static method B<var> allows you to define attributes for your class.
-Attributes declared this way will be available in the objects
-(accessors will let you get and set it).
-
-This static method is similar to Moose's B<has> method.
-
-You can handle each attribute options with the %options hashtable. The
-following options are supported:
-
-=head3 type
-
-The attribute's type, put here either a class name or one of the 
-supported type: 
-
-=over 4
-
-=item Int
-
-=item String
-
-=item Boolean
-
-=back
-
-
-=head3 default
-
-The attribute's default value (the attribute will have this
-value at instanciation time if none given).
-
-=back
-
-=head2 extends
+=head2 INHERITANCE
 
 The keyword "extends" allows you to declare that a class "foo" inherits from a
 class "bar". All attributes properties of class "bar" will be applied to class
@@ -382,16 +378,32 @@ this documentation:
   use Coat;
   extends 'Point';
 
-  var 'z' => (type => 'Int', default => 0):
+  has 'z' => (type => 'Int', default => 0):
 
   my $point3d = new Point3D x => 1, y => 3, z => 1;
   $point3d->x;    # will return: 1
   $point3d->y;    # will return: 3
   $point3d->z;    # will return: 1
 
-=head1 HOOKS
+=head2 ATTRIBUTES AND ACCESSORS
 
-Like Moose, Coat lets you define hooks. There are three kind of hooks :
+The static method B<has> allows you to define attributes for your class.
+
+You can handle each attribute options with the %options hashtable. The
+following options are supported:
+
+=head3 type
+
+More to come later here...
+
+=head3 default
+
+The attribute's default value (the attribute will have this
+value at instanciation time if none given).
+
+=head1 METHOD MODIFIERS (HOOKS)
+
+Like C<Moose>, Coat lets you define hooks. There are three kind of hooks :
 before, after and around.
 
 =head2 before
@@ -419,7 +431,7 @@ Example:
 =head2 after
 
 When writing an "after" hook you can catch the call to an inherited method and 
-execute xome code after the original method is executed. You receive in your
+execute some code after the original method is executed. You receive in your
 hook the result of the father's method.
 
 Example:
@@ -442,6 +454,7 @@ Example:
 
 When writing an "around" hook you can catch the call to an inherited method and 
 actually redefine it on-the-fly.
+
 You get the code reference to the parent's method and its arguments, and can
 do what you want then. It's a very powerful hook but also dangerous, so be
 careful when writing such a hook not to break the original call.
@@ -468,13 +481,22 @@ Example:
     return $res + 3;
   }
 
-=head1 AUTHOR
+=head1 SEE ALSO
 
-Coat was written by Alexis Sukrieh <sukria+perl@sukria.net>
+Moose is the mother of Coat, every concept inside Coat was friendly stolen
+from it, you definitely want to look at Moose.
 
-=head1 COPYING
+=head1 AUTHORS
 
-Coat is copyright (c) 2007 Alexis Sukrieh.
+This module was written by Alexis Sukrieh E<lt>sukria+perl@sukria.netE<gt>
+
+Strong and helpful reviews were made by Stevan Little and 
+Matt (mst) Trout ; this module wouldn't be there without their help.
+Huge thank to them.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2007 by Alexis Sukrieh.
 
 L<http://www.sukria.net/perl/coat/>
 
@@ -482,4 +504,3 @@ This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 
 
 =cut
-

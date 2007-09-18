@@ -1,11 +1,11 @@
 package Person;
 use Coat;
 
-var 'name' => (
+has 'name' => (
     type => 'String',
 );
 
-var 'force' => (
+has 'force' => (
     type => 'Int',
     default => 1
 );
@@ -20,7 +20,7 @@ package Soldier;
 use Coat;
 extends 'Person';
 
-var 'force' => (
+has 'force' => (
     type => 'Int',
     default => 3
 );
@@ -35,7 +35,7 @@ package General;
 use Coat;
 extends 'Soldier';
 
-var 'force' => (
+has 'force' => (
     type => 'Int',
     default => '5'
 );
@@ -55,12 +55,12 @@ ok(defined $man, 'new Person');
 ok(defined $soldier, 'new Soldier');
 ok(defined $general, 'new General');
 
-ok($man->has('name'), '$man->has(name)');
-ok($man->has('force'), '$man->has(force)');
-ok($soldier->has('name'), '$soldier->has(name)');
-ok($soldier->has('force'), '$soldier->has(force)');
-ok($general->has('name'), '$general->has(name)');
-ok($general->has('force'), '$general->has(force)');
+ok($man->has_attr('name'), '$man->has_attr(name)');
+ok($man->has_attr('force'), '$man->has_attr(force)');
+ok($soldier->has_attr('name'), '$soldier->has_attr(name)');
+ok($soldier->has_attr('force'), '$soldier->has_attr(force)');
+ok($general->has_attr('name'), '$general->has_attr(name)');
+ok($general->has_attr('force'), '$general->has_attr(force)');
 
 ok($man->force == 1, '$man->force == 1');
 ok($soldier->force == 3, '$soldier->force == 3');

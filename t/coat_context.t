@@ -5,7 +5,7 @@ use warnings;
 {
     package Foo;
     use Coat;
-    var 'x';
+    has 'x';
 
     sub context1 { wantarray ? 'list' : 'scalar' }
     sub context2 { wantarray ? 'list' : 'scalar' }
