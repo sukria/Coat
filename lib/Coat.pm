@@ -123,10 +123,11 @@ sub __hooks_after_push { push @{ hooks_after( $_[0], $_[1] ) }, $_[2] }
 sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
 
 # The idea here is to loop on each coderef given
-# and build subs to ensure the orif is correctly propagated 
-# eg: we rewrite the "around" hooks  defined to pass their coderef neighboor
-# bug thank to Class::MOP here, which was helpful with the idea of
-# $compile_around_method
+# and build subs to ensure the orig coderef is correctly propagated.
+# -> We rewrite the "around" hooks defined to pass their coderef neighboor as
+# a first argument.
+# (big thank to STEVAN's Class::MOP here, which was helpful with the idea of
+# $compile_around_method)
 sub __compile_around_modifier
 {
     {
@@ -137,10 +138,9 @@ sub __compile_around_modifier
         @_ = (sub { $hook->($orig, @_) }, @_);
         redo;
     }
-
 }
 
-# this one is the wrapper builder for method with hooks.
+# This one is the wrapper builder for method with hooks.
 # It can mix up before, after and around hooks.
 sub __build_sub_with_hook($$) 
 {
