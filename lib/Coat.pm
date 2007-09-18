@@ -91,14 +91,14 @@ sub has {
 
 # this is where inheritance takes place
 sub extends {
-    my ($father) = @_;
+    my ($father, $class) = @_;
     confess "Cannot extend without a class name"
       unless defined $father;
 
     confess "Class '$father' is unknown, cannot extends"
       unless class_exists($father);
 
-    my $class = getscope();
+    $class = getscope() unless defined $class;
 
     # first we inherit the class description from our father
     __copy_class_description( $father, $class );
@@ -222,8 +222,11 @@ sub import {
     # delcare the class
     class( getscope() );
     
-    # forced inheritance to caller
-    { no strict 'refs'; @{"${caller}::ISA"} = ('Coat::Object'); }
+    # be sure Coat::Object is known as a valid class
+    class('Coat::Object');
+    
+    # force inheritance from Coat::Object
+    extends('Coat::Object', getscope());
 
     return if $caller eq 'main';
     Coat->export_to_level( 1, @_ );

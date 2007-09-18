@@ -47,7 +47,6 @@ sub init {
     }
 }
 
-
 # end Coat::Object
 1;
 __END__
