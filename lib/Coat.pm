@@ -33,8 +33,8 @@ sub class_attr { @_ == 3 ?
 
 sub class_exists     { exists $CLASS_ATTRS->{$_[0]}            } 
 sub class_has_attr   { exists $CLASS_ATTRS->{$_[0]}{$_[1]}     }
-sub class_set_father { $CLASS_ATTRS->{__father}{$_[0]} = $_[1] }
-sub class_get_father { $CLASS_ATTRS->{__father}{$_[0]}         }
+sub class_set_mother { $CLASS_ATTRS->{__mother}{$_[0]} = $_[1] }
+sub class_get_mother { $CLASS_ATTRS->{__mother}{$_[0]}         }
 
 # hooks for a module
 sub hooks        { $CLASS_ATTRS->{__hooks}{ $_[0] } }
@@ -89,32 +89,45 @@ sub has {
     }
 }
 
-# this is where inheritance takes place
-sub extends {
-    my ($father, $class) = @_;
-    confess "Cannot extend without a class name"
-      unless defined $father;
-
-    confess "Class '$father' is unknown, cannot extends"
-      unless class_exists($father);
-
+# the private method for declaring inheritance, we can here overide the 
+# caller class with a random one, useful for our internal cooking, see import().
+sub __extends_class
+{
+    my ($mothers, $class) = @_;
     $class = getscope() unless defined $class;
 
-    # first we inherit the class description from our father
-    __copy_class_description( $father, $class );
+    # the extends mechanism overwrite the @ISA list
+    { no strict 'refs'; @{"${class}::ISA"} = (); }
 
-    # then we tell Perl we actually inherits from our father
-    { no strict 'refs'; @{"${class}::ISA"} = ($father); }
+    # then we inherit from all the mothers given
+    foreach my $mother (@$mothers) {
+        confess "Class '$mother' is unknown, cannot extends"
+          unless class_exists($mother);
 
-    # save the fact that $class inherits from $father
-    class_set_father( $class, $father ); 
+        # first we inherit the class description from our mother
+        __copy_class_description( $mother, $class );
+
+        # add the mother to our ancestors
+        { no strict 'refs'; push @{"${class}::ISA"}, $mother; }
+
+        # save the fact that $class inherits from $mother
+        class_set_mother( $class, $mother ); 
+    }
+}
+
+# the public inheritance method, takes a list of class we should inherit from
+sub extends {
+    my (@mothers) = @_;
+    confess "Cannot extend without a class name"
+      unless @mothers;
+    __extends_class(\@mothers, getscope());
 }
 
 # returns the parent class of the class given
 sub super {
     my ($class) = @_;
     $class = getscope() unless defined $class;
-    return class_get_father( $class );
+    return class_get_mother( $class );
 }
 
 # local helpers for building wrapped methods
@@ -226,7 +239,7 @@ sub import {
     class('Coat::Object');
     
     # force inheritance from Coat::Object
-    extends('Coat::Object', getscope());
+    __extends_class(['Coat::Object'], getscope());
 
     return if $caller eq 'main';
     Coat->export_to_level( 1, @_ );
@@ -312,7 +325,8 @@ automagic, hook modifiers and inheritance facilities.
 B<It is not Moose> but the small bunch of features provided are
 B<Moose-compatible>. That means you can start with Coat and, if later you
 get to the point where you can or want to upgrade to Moose, your code won't
-have to change : every features provided by Coat exist in the Moose's API.
+have to change : every features provided by Coat exist in the Moose's API (but
+the opposite is not true, as you can imagine).
 
 =head1 SYNTAX
 
@@ -349,14 +363,14 @@ already exported by Coat when you use it.
 =head1 STATIC METHODS
 
 Coat provides you with static methods you use to define your class.
-They're respectingly dedicated to declare attributes, define method modifiers
-(hooks) and set inheritance.
+They're respectingly dedicated to set inheritance, declare attributes
+and define method modifiers (hooks).
 
 =head2 INHERITANCE
 
-The keyword "extends" allows you to declare that a class "foo" inherits from a
-class "bar". All attributes properties of class "bar" will be applied to class
-"foo" as well as the accessors of class "bar".
+The keyword "extends" allows you to declare that a class "Child" inherits from a
+class "Parent". All attributes properties of class "Parent" will be applied to class
+"Child" as well as the accessors of class "Parent".
 
 Here is an example with Point3D, an extension of Point previously declared in
 this documentation:
@@ -420,7 +434,7 @@ Example:
 
 When writing an "after" hook you can catch the call to an inherited method and 
 execute some code after the original method is executed. You receive in your
-hook the result of the father's method.
+hook the result of the mother's method.
 
 Example:
 
