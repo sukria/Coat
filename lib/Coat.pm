@@ -3,6 +3,7 @@ package Coat;
 use strict;
 use warnings;
 use Carp 'confess';
+use Symbol;
 
 use Exporter;
 use base 'Exporter';
@@ -60,33 +61,32 @@ sub has {
 
     class_attr( $scope, $name, { type => 'Scalar', %options } );
     
-    {
-        no strict 'refs';
-        undef *${accessor} if defined *${accessor};
-        *${accessor} = sub {
-            my ($self, $value) = @_;
-            confess "Unknown attribute '$name' for class ".ref($self) unless 
-                $self->has_attr($name);
+    my $accessor_code = sub {
+        my ($self, $value) = @_;
+        confess "Unknown attribute '$name' for class ".ref($self) unless 
+            $self->has_attr($name);
 
-            # want a set()
-            if (@_ > 1) { 
-                my $attrs = $self->attrs;
-                my $type  = $attrs->{$name}{type};
+        # want a set()
+        if (@_ > 1) { 
+            my $attrs = $self->attrs;
+            my $type  = $attrs->{$name}{type};
 
-                # FIXME : this will be better when we have Coat::Types implemented
-                confess "$type '$name' cannot be set to '$value'" unless 
-                    ( __value_is_valid( $value, $type ) );
+            # FIXME : this will be better when we have Coat::Types implemented
+            confess "$type '$name' cannot be set to '$value'" unless 
+                ( __value_is_valid( $value, $type ) );
 
-                $self->{_values}{$name} = $value;
-                return $value;
-            }
-            
-            # want a get()
-            else {
-                return  $self->{_values}{$name};
-            }
-        };
-    }
+            $self->{_values}{$name} = $value;
+            return $value;
+        }
+
+        # want a get()
+        else {
+            return  $self->{_values}{$name};
+        }
+    };
+
+    # now bind the subref to the appropriate symbol in the caller class
+    __bind_coderef_to_symbol($accessor_code, $accessor);
 }
 
 # the private method for declaring inheritance, we can here overide the 
@@ -160,18 +160,15 @@ sub __build_sub_with_hook($$)
     my ( $class, $method ) = @_;
 
     my $super        = super($class);
-    my $super_method = "${super}::${method}";
-
     my $full_method = "${class}::${method}";
-    no strict 'refs';
-    undef *${full_method};
+    my $super_method = *{qualify_to_ref($method => $super)};  
 
     my ( $before, $after, $around ) = (
             hooks_before( $class, $method ),
             hooks_after( $class, $method ),
             hooks_around( $class, $method ));
 
-    *${full_method} = sub {
+    my $modified_method_code = sub {
         my ( $self, @args ) = @_;
         my @result;
         my $result;
@@ -192,6 +189,9 @@ sub __build_sub_with_hook($$)
         return unless defined wantarray;
         return wantarray ? @result : $result;
     };
+
+    # now bind the new method to the appropriate symbol
+    __bind_coderef_to_symbol($modified_method_code, $full_method);
 }
 
 # the before hook catches the call to an inherited method and exectue
@@ -267,6 +267,16 @@ sub getscope {
 # Private methods (only called from Coat.pm)
 ##############################################################################
 
+sub __bind_coderef_to_symbol($$)
+{
+    my ($coderef, $symbol) = @_;
+    {
+        no strict 'refs';
+        no warnings 'redefine', 'prototype';
+        *$symbol = $coderef;
+    }
+}
+
 # check the attributes integrity
 sub __value_is_valid($$) {
     my ( $value, $type ) = @_;
@@ -313,7 +323,7 @@ Coat -- A light and self-dependant meta-class for Perl5
 
 =head1 DESCRIPTION
 
-This module was inspired by the excellent Moose meta class which provides
+This module was inspired by the excellent C<Moose> meta class which provides
 enhanced object creation for Perl5.
 
 Moose is great, but has huge dependencies which makes it difficult to
@@ -447,9 +457,11 @@ Example:
   use Coat;
   extends 'Foo';
 
+  my $flag;
+
   after 'method' => sub {
-    my ($self, $result, @args) = @_;
-    return $result + 3;
+    my ($self, @args) = @_;
+    $flag = 1;
   };
 
 =head2 around
@@ -472,9 +484,6 @@ Example:
   use Coat;
   extends 'Foo';
 
-  # the following around hook implement the previous 'after' hook 
-  # defined in this documentaiton.
-
   around 'method' => sub {
     my $orig = shift;
     my ($self, @args) = @_;
@@ -485,8 +494,8 @@ Example:
 
 =head1 SEE ALSO
 
-Moose is the mother of Coat, every concept inside Coat was friendly stolen
-from it, you definitely want to look at Moose.
+C<Moose> is the mother of Coat, every concept inside Coat was friendly stolen
+from it, you definitely want to look at C<Moose>.
 
 =head1 AUTHORS
 
