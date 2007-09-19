@@ -1,6 +1,6 @@
 package Coat::Object;
 
-# this is the mother-class of each Coat objects, it provides 
+# this is the mother-class of each Coat objects, it provides
 # basic instance methods such as a constructor
 
 # The default constructor
@@ -18,13 +18,13 @@ sub new {
 # returns the meta-class description of that instance
 sub meta {
     my ($self) = @_;
-    return Coat::class( ref( $self ) );
+    return Coat::class( ref($self) );
 }
 
 # tells if the given attribute is delcared for the class of that instance
 sub has_attr {
     my ( $self, $var ) = @_;
-    return Coat::class_has_attr( ref( $self ), $var );
+    return Coat::class_has_attr( ref($self), $var );
 }
 
 # init an instance : put default values and set values
