@@ -9,6 +9,8 @@ use Exporter;
 use base 'Exporter';
 use vars qw(@EXPORT $VERSION $AUTHORITY);
 
+# All the classes descriptions are handled by Coat::MetaClass
+use Coat::Meta;
 # This is the mother class for each class that uses Coat
 use Coat::Object;
 
@@ -18,71 +20,36 @@ $AUTHORITY = 'cpan:SUKRIA';
 # our exported keywords for class description
 @EXPORT = qw(has extends before after around);
 
-# This is the class placeholder for attribute descriptions
-# it's present in scope of the class itself, not for each instance
-my $CLASS_ATTRS = {};
-
-# local accessors for class attributes/descriptions
-
-# declare/get a class description
-sub class { $CLASS_ATTRS->{ $_[0] } ||= {} }
-
-# set/get an attribute of a class
-sub class_attr {
-    @_ == 3
-      ? $CLASS_ATTRS->{ $_[0] }{ $_[1] } = $_[2]
-      : $CLASS_ATTRS->{ $_[0] }{ $_[1] } ||= {};
-}
-
-sub class_exists     { exists $CLASS_ATTRS->{ $_[0] } }
-sub class_has_attr   { exists $CLASS_ATTRS->{ $_[0] }{ $_[1] } }
-sub class_set_mother { $CLASS_ATTRS->{__mother}{ $_[0] } = $_[1] }
-sub class_get_mother { $CLASS_ATTRS->{__mother}{ $_[0] } }
-
-# hooks for a module
-sub hooks        { $CLASS_ATTRS->{__hooks}{ $_[0] } }
-sub hooks_before { $CLASS_ATTRS->{__hooks}{ $_[0] }{before}{ $_[1] } ||= [] }
-sub hooks_after  { $CLASS_ATTRS->{__hooks}{ $_[0] }{after}{ $_[1] } ||= [] }
-sub hooks_around { $CLASS_ATTRS->{__hooks}{ $_[0] }{around}{ $_[1] } ||= [] }
-
-# helper for copying a class description (used when inheriting from a class)
-sub __copy_class_description($$) {
-    my ( $source, $dest ) = @_;
-    foreach my $key ( keys %{ $CLASS_ATTRS->{$source} } ) {
-        $CLASS_ATTRS->{$dest}{$key} = $CLASS_ATTRS->{$source}{$key};
-    }
-}
-
 # has() declares an attribute and builds the corresponding accessors
 sub has {
-    my ( $name, %options ) = @_;
-    confess "Attribute is a reference, cannot declare" if ref($name);
+    my ( $attribute, %options ) = @_;
+    confess "Attribute is a reference, cannot declare" if ref($attribute);
 
-    my $scope    = getscope();
-    my $accessor = "${scope}::${name}";
+    my $class    = getscope();
+    my $accessor = "${class}::${attribute}";
 
-    class_attr( $scope, $name, { type => 'Scalar', %options } );
+    Coat::Meta->attribute( $class, $attribute, { type => 'Scalar', %options } );
 
     my $accessor_code = sub {
         my ( $self, $value ) = @_;
-        confess "Unknown attribute '$name' for class " . ref($self)
-          unless $self->has_attr($name);
-
+        
         # want a set()
         if ( @_ > 1 ) {
-            my $attrs = $self->meta;
-            my $type  = $attrs->{$name}{type};
+            my $attr = Coat::Meta->attribute( ref( $self ), $attribute );
+            my $type = $attr->{'type'};
 
-            confess "$type '$name' cannot be set to '$value'"
+            confess "$type '$attribute' cannot be set to '$value'"
               unless ( __value_is_valid( $value, $type ) );
 
-            $self->{_values}{$name} = $value;
+            $self->{$attribute} = $value;
             return $value;
         }
 
         # want a get()
         else {
-            return $self->{_values}{$name};
+            confess "Attribute $attribute is unknown" 
+                unless Coat::Meta->has( ref( $self ), $attribute );
+            return $self->{$attribute};
         }
     };
 
@@ -102,16 +69,13 @@ sub __extends_class {
     # then we inherit from all the mothers given
     foreach my $mother (@$mothers) {
         confess "Class '$mother' is unknown, cannot extends"
-          unless class_exists($mother);
-
-        # first we inherit the class description from our mother
-        __copy_class_description( $mother, $class );
+          unless Coat::Meta->exists($mother);
 
         # add the mother to our ancestors
         { no strict 'refs'; push @{"${class}::ISA"}, $mother; }
 
         # save the fact that $class inherits from $mother
-        class_set_mother( $class, $mother );
+        Coat::Meta->extends( $class, $mother );
     }
 }
 
@@ -123,17 +87,6 @@ sub extends {
     __extends_class( \@mothers, getscope() );
 }
 
-# returns the parent class of the class given
-sub super {
-    my ($class) = @_;
-    $class = getscope() unless defined $class;
-    return class_get_mother($class);
-}
-
-# local helpers for building wrapped methods
-sub __hooks_before_push { push @{ hooks_before( $_[0], $_[1] ) }, $_[2] }
-sub __hooks_after_push { push @{ hooks_after( $_[0], $_[1] ) }, $_[2] }
-sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
 
 # The idea here is to loop on each coderef given
 # and build subs to ensure the orig coderef is correctly propagated.
@@ -157,14 +110,17 @@ sub __compile_around_modifier {
 sub __build_sub_with_hook($$) {
     my ( $class, $method ) = @_;
 
-    my $super        = super($class);
+    my $parents      = Coat::Meta->parents( $class );
+    # FIXME : we have to find the good super: the one who provides the sub
+    my $super = $parents->[scalar(@$parents) - 1];
+
     my $full_method  = "${class}::${method}";
     my $super_method = *{ qualify_to_ref( $method => $super ) };
 
     my ( $before, $after, $around ) = (
-        hooks_before( $class, $method ),
-        hooks_after( $class, $method ),
-        hooks_around( $class, $method )
+        Coat::Meta->before_modifiers( $class, $method ),
+        Coat::Meta->after_modifiers ( $class, $method ),
+        Coat::Meta->around_modifiers( $class, $method ),
     );
 
     my $modified_method_code = sub {
@@ -200,7 +156,7 @@ sub __build_sub_with_hook($$) {
 sub before {
     my ( $method, $code ) = @_;
     my $class = getscope();
-    __hooks_before_push( $class, $method, $code );
+    Coat::Meta->before_modifiers( $class, $method, $code );
     __build_sub_with_hook( $class, $method );
 }
 
@@ -209,7 +165,7 @@ sub before {
 sub after {
     my ( $method, $code ) = @_;
     my $class = getscope();
-    __hooks_after_push( $class, $method, $code );
+    Coat::Meta->after_modifiers( $class, $method, $code );
     __build_sub_with_hook( $class, $method );
 }
 
@@ -219,7 +175,7 @@ sub after {
 sub around {
     my ( $method, $code ) = @_;
     my $class = getscope();
-    __hooks_around_push( $class, $method, $code );
+    Coat::Meta->around_modifiers( $class, $method, $code );
     __build_sub_with_hook( $class, $method );
 }
 
@@ -233,10 +189,10 @@ sub import {
     warnings->import;
 
     # delcare the class
-    class( getscope() );
+    Coat::Meta->declare( getscope() );
 
     # be sure Coat::Object is known as a valid class
-    class('Coat::Object');
+    Coat::Meta->declare('Coat::Object');
 
     # force inheritance from Coat::Object
     __extends_class( ['Coat::Object'], getscope() );
@@ -278,8 +234,6 @@ sub __bind_coderef_to_symbol($$) {
 # check the attributes integrity
 sub __value_is_valid($$) {
     my ( $value, $type ) = @_;
-
-    Coat::Types
 
     return 1 if $type eq 'Scalar';
 

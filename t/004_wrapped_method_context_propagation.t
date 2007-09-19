@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 BEGIN {
     use_ok('Coat');
@@ -42,6 +42,8 @@ BEGIN {
 
 my $base = TouchyBase->new;
 my $after = AfterSub->new;
+
+ok(($base->x) == 0, 'default value is affected to x');
 
 foreach my $obj ( $base, $after ) {
     my $class = ref $obj;

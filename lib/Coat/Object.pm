@@ -1,5 +1,9 @@
 package Coat::Object;
 
+use strict;
+use warnings;
+use Coat::Meta;
+
 # this is the mother-class of each Coat objects, it provides
 # basic instance methods such as a constructor
 
@@ -18,13 +22,13 @@ sub new {
 # returns the meta-class description of that instance
 sub meta {
     my ($self) = @_;
-    return Coat::class( ref($self) );
+    return Coat::Meta->declare( ref($self) );
 }
 
 # tells if the given attribute is delcared for the class of that instance
 sub has_attr {
     my ( $self, $var ) = @_;
-    return Coat::class_has_attr( ref($self), $var );
+    return Coat::Meta->has( ref($self), $var );
 }
 
 # init an instance : put default values and set values
@@ -33,10 +37,10 @@ sub init {
     my ( $self, %attrs ) = @_;
 
     # default values
-    my $class_attr = $self->meta;
+    my $class_attr = Coat::Meta->all_attributes( ref( $self ) );
     foreach my $attr ( keys %{$class_attr} ) {
-        if ( defined $class_attr->{$attr}{default} ) {
-            $self->$attr( $class_attr->{$attr}{default} );
+        if ( defined $class_attr->{$attr}{'default'} ) {
+            $self->$attr( $class_attr->{$attr}{'default'} );
         }
     }
 
