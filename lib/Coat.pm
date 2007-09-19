@@ -25,17 +25,19 @@ my $CLASS_ATTRS = {};
 # local accessors for class attributes/descriptions
 
 # declare/get a class description
-sub class { $CLASS_ATTRS->{$_[0]} ||= {} }
+sub class { $CLASS_ATTRS->{ $_[0] } ||= {} }
 
 # set/get an attribute of a class
-sub class_attr { @_ == 3 ? 
-    $CLASS_ATTRS->{$_[0]}{$_[1]} = $_[2] : 
-    $CLASS_ATTRS->{$_[0]}{$_[1]} ||= {}}
+sub class_attr {
+    @_ == 3
+      ? $CLASS_ATTRS->{ $_[0] }{ $_[1] } = $_[2]
+      : $CLASS_ATTRS->{ $_[0] }{ $_[1] } ||= {};
+}
 
-sub class_exists     { exists $CLASS_ATTRS->{$_[0]}            } 
-sub class_has_attr   { exists $CLASS_ATTRS->{$_[0]}{$_[1]}     }
-sub class_set_mother { $CLASS_ATTRS->{__mother}{$_[0]} = $_[1] }
-sub class_get_mother { $CLASS_ATTRS->{__mother}{$_[0]}         }
+sub class_exists     { exists $CLASS_ATTRS->{ $_[0] } }
+sub class_has_attr   { exists $CLASS_ATTRS->{ $_[0] }{ $_[1] } }
+sub class_set_mother { $CLASS_ATTRS->{__mother}{ $_[0] } = $_[1] }
+sub class_get_mother { $CLASS_ATTRS->{__mother}{ $_[0] } }
 
 # hooks for a module
 sub hooks        { $CLASS_ATTRS->{__hooks}{ $_[0] } }
@@ -53,27 +55,27 @@ sub __copy_class_description($$) {
 
 # has() declares an attribute and builds the corresponding accessors
 sub has {
-    my ($name, %options) = @_;
+    my ( $name, %options ) = @_;
     confess "Attribute is a reference, cannot declare" if ref($name);
 
-    my $scope = getscope();
+    my $scope    = getscope();
     my $accessor = "${scope}::${name}";
 
     class_attr( $scope, $name, { type => 'Scalar', %options } );
-    
+
     my $accessor_code = sub {
-        my ($self, $value) = @_;
-        confess "Unknown attribute '$name' for class ".ref($self) unless 
-            $self->has_attr($name);
+        my ( $self, $value ) = @_;
+        confess "Unknown attribute '$name' for class " . ref($self)
+          unless $self->has_attr($name);
 
         # want a set()
-        if (@_ > 1) { 
-            my $attrs = $self->attrs;
+        if ( @_ > 1 ) {
+            my $attrs = $self->meta;
             my $type  = $attrs->{$name}{type};
 
             # FIXME : this will be better when we have Coat::Types implemented
-            confess "$type '$name' cannot be set to '$value'" unless 
-                ( __value_is_valid( $value, $type ) );
+            confess "$type '$name' cannot be set to '$value'"
+              unless ( __value_is_valid( $value, $type ) );
 
             $self->{_values}{$name} = $value;
             return $value;
@@ -81,19 +83,18 @@ sub has {
 
         # want a get()
         else {
-            return  $self->{_values}{$name};
+            return $self->{_values}{$name};
         }
     };
 
     # now bind the subref to the appropriate symbol in the caller class
-    __bind_coderef_to_symbol($accessor_code, $accessor);
+    __bind_coderef_to_symbol( $accessor_code, $accessor );
 }
 
-# the private method for declaring inheritance, we can here overide the 
+# the private method for declaring inheritance, we can here overide the
 # caller class with a random one, useful for our internal cooking, see import().
-sub __extends_class
-{
-    my ($mothers, $class) = @_;
+sub __extends_class {
+    my ( $mothers, $class ) = @_;
     $class = getscope() unless defined $class;
 
     # the extends mechanism overwrite the @ISA list
@@ -111,7 +112,7 @@ sub __extends_class
         { no strict 'refs'; push @{"${class}::ISA"}, $mother; }
 
         # save the fact that $class inherits from $mother
-        class_set_mother( $class, $mother ); 
+        class_set_mother( $class, $mother );
     }
 }
 
@@ -120,14 +121,14 @@ sub extends {
     my (@mothers) = @_;
     confess "Cannot extend without a class name"
       unless @mothers;
-    __extends_class(\@mothers, getscope());
+    __extends_class( \@mothers, getscope() );
 }
 
 # returns the parent class of the class given
 sub super {
     my ($class) = @_;
     $class = getscope() unless defined $class;
-    return class_get_mother( $class );
+    return class_get_mother($class);
 }
 
 # local helpers for building wrapped methods
@@ -141,32 +142,31 @@ sub __hooks_around_push { push @{ hooks_around( $_[0], $_[1] ) }, $_[2] }
 # a first argument.
 # (big thank to STEVAN's Class::MOP here, which was helpful with the idea of
 # $compile_around_method)
-sub __compile_around_modifier
-{
+sub __compile_around_modifier {
     {
         my $orig = shift;
         return $orig unless @_;
 
         my $hook = shift;
-        @_ = (sub { $hook->($orig, @_) }, @_);
+        @_ = ( sub { $hook->( $orig, @_ ) }, @_ );
         redo;
     }
 }
 
 # This one is the wrapper builder for method with hooks.
 # It can mix up before, after and around hooks.
-sub __build_sub_with_hook($$) 
-{
+sub __build_sub_with_hook($$) {
     my ( $class, $method ) = @_;
 
     my $super        = super($class);
-    my $full_method = "${class}::${method}";
-    my $super_method = *{qualify_to_ref($method => $super)};  
+    my $full_method  = "${class}::${method}";
+    my $super_method = *{ qualify_to_ref( $method => $super ) };
 
     my ( $before, $after, $around ) = (
-            hooks_before( $class, $method ),
-            hooks_after( $class, $method ),
-            hooks_around( $class, $method ));
+        hooks_before( $class, $method ),
+        hooks_after( $class, $method ),
+        hooks_around( $class, $method )
+    );
 
     my $modified_method_code = sub {
         my ( $self, @args ) = @_;
@@ -175,14 +175,16 @@ sub __build_sub_with_hook($$)
 
         $_->(@_) for @$before;
 
-        my $around_modifier = __compile_around_modifier(
-                \&$super_method, @$around);
-        
-        (defined wantarray) 
-            ? (wantarray 
-                ? (@result = $around_modifier->(@_))
-                : ($result = $around_modifier->(@_)))
-            : ($around_modifier->(@_));
+        my $around_modifier =
+          __compile_around_modifier( \&$super_method, @$around );
+
+        ( defined wantarray )
+          ? (
+            wantarray
+            ? ( @result = $around_modifier->(@_) )
+            : ( $result = $around_modifier->(@_) )
+          )
+          : ( $around_modifier->(@_) );
 
         $_->(@_) for @$after;
 
@@ -191,7 +193,7 @@ sub __build_sub_with_hook($$)
     };
 
     # now bind the new method to the appropriate symbol
-    __bind_coderef_to_symbol($modified_method_code, $full_method);
+    __bind_coderef_to_symbol( $modified_method_code, $full_method );
 }
 
 # the before hook catches the call to an inherited method and exectue
@@ -222,7 +224,6 @@ sub around {
     __build_sub_with_hook( $class, $method );
 }
 
-
 # we override the import method to actually force the "strict" and "warnings"
 # modes to children and also to force the Coat::Object inheritance.
 sub import {
@@ -231,15 +232,15 @@ sub import {
     # import strict and warnings
     strict->import;
     warnings->import;
-    
+
     # delcare the class
     class( getscope() );
-    
+
     # be sure Coat::Object is known as a valid class
     class('Coat::Object');
-    
+
     # force inheritance from Coat::Object
-    __extends_class(['Coat::Object'], getscope());
+    __extends_class( ['Coat::Object'], getscope() );
 
     return if $caller eq 'main';
     Coat->export_to_level( 1, @_ );
@@ -262,14 +263,12 @@ sub getscope {
     }
 }
 
-
 ##############################################################################
 # Private methods (only called from Coat.pm)
 ##############################################################################
 
-sub __bind_coderef_to_symbol($$)
-{
-    my ($coderef, $symbol) = @_;
+sub __bind_coderef_to_symbol($$) {
+    my ( $coderef, $symbol ) = @_;
     {
         no strict 'refs';
         no warnings 'redefine', 'prototype';

@@ -15,9 +15,8 @@ sub new {
     return $self;
 }
 
-
-# returns the attributes descriptions for the class of that instance
-sub attrs {
+# returns the meta-class description of that instance
+sub meta {
     my ($self) = @_;
     return Coat::class( ref( $self ) );
 }
@@ -34,7 +33,7 @@ sub init {
     my ( $self, %attrs ) = @_;
 
     # default values
-    my $class_attr = $self->attrs;
+    my $class_attr = $self->meta;
     foreach my $attr ( keys %{$class_attr} ) {
         if ( defined $class_attr->{$attr}{default} ) {
             $self->$attr( $class_attr->{$attr}{default} );
@@ -57,9 +56,33 @@ Coat::Object - The mother class for each class that uses Coat
 
 =head1 DESCRIPTION
 
+When a class is described with Coat, each instance of that class will inherit
+from Coat::Object.
+
+This is the mother-class for each Coat-created objects, it provides a basic default
+constructor and access to the meta-class.
+
 =head1 METHODS
 
+=head2 new
+
+This is the default constructor, it creates a new object for your class and
+calls init with the arguments given.
+
+=head2 init
+
+This method initialize the instance: basically, setting default values to
+attributes and setting values received (passed to the "new" method).
+
+=head2 meta
+
+Returns the meta-calss description: attributes declared with properties.
+
 =head1 SEE ALSO
+
+See C<Coat>, the meta-class for Coat::Object's.
+
+See also C<Moose>, the mother of Coat.
 
 =head1 AUTHORS
 
