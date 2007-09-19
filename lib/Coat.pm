@@ -73,7 +73,6 @@ sub has {
             my $attrs = $self->meta;
             my $type  = $attrs->{$name}{type};
 
-            # FIXME : this will be better when we have Coat::Types implemented
             confess "$type '$name' cannot be set to '$value'"
               unless ( __value_is_valid( $value, $type ) );
 
@@ -279,6 +278,9 @@ sub __bind_coderef_to_symbol($$) {
 # check the attributes integrity
 sub __value_is_valid($$) {
     my ( $value, $type ) = @_;
+
+    Coat::Types
+
     return 1 if $type eq 'Scalar';
 
     my $lexical_rules = {
@@ -318,7 +320,7 @@ __END__
 
 =head1 NAME
 
-Coat -- A light and self-dependant meta-class for Perl5
+Coat -- A light and self-dependent meta-class for Perl5
 
 =head1 DESCRIPTION
 
