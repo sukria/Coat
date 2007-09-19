@@ -12,7 +12,7 @@ use vars qw(@EXPORT $VERSION $AUTHORITY);
 # This is the mother class for each class that uses Coat
 use Coat::Object;
 
-$VERSION   = '0.1_0.2';
+$VERSION   = '0.1_0.3';
 $AUTHORITY = 'cpan:SUKRIA';
 
 # our exported keywords for class description
