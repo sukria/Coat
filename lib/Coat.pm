@@ -28,27 +28,23 @@ sub has {
     my $class    = getscope();
     my $accessor = "${class}::${attribute}";
 
-    Coat::Meta->attribute( $class, $attribute, { type => 'Scalar', %options } );
+    my $attr = Coat::Meta->attribute( $class, $attribute, \%options);
 
     my $accessor_code = sub {
         my ( $self, $value ) = @_;
         
         # want a set()
         if ( @_ > 1 ) {
-            my $attr = Coat::Meta->attribute( ref( $self ), $attribute );
             my $type = $attr->{'type'};
 
             confess "$type '$attribute' cannot be set to '$value'"
               unless ( __value_is_valid( $value, $type ) );
 
-            $self->{$attribute} = $value;
-            return $value;
+            return $self->{$attribute} = $value;
         }
 
         # want a get()
         else {
-            confess "Attribute $attribute is unknown" 
-                unless Coat::Meta->has( ref( $self ), $attribute );
             return $self->{$attribute};
         }
     };

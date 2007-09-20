@@ -36,16 +36,20 @@ sub declare
 sub attribute 
 {
     my ($self, $class, $attribute, $value) = @_;
+        
+    # the attribute description may already exist 
+    my $desc = Coat::Meta->has( $class, $attribute ); 
+    $desc = {} unless defined $desc;
+    $desc->{type} = 'Scalar' unless exists $desc->{type};
     
     # we define the attribute for the class
     if (@_ == 4) {
-        return $CLASSES->{ $class }{ $attribute } = $value;
+        return $CLASSES->{ $class }{ $attribute } = { %{$desc}, %{$value}};
     }
 
     # we have to return the attribute description
     # either from ourselves, or from our parents
     else {
-        my $desc = Coat::Meta->has( $class, $attribute ); 
         return $desc if defined $desc;
 
         confess "Attribute $attribute was not previously declared ".
@@ -118,7 +122,13 @@ sub extends
 { 
     my ($self, $class, $parents) = @_;
     $parents = [$parents] unless ref $parents;
+
+     # init the family with parents if not exists
+     if (! defined $CLASSES->{'@!family'}{ $class } ) {
+        $CLASSES->{'@!family'}{ $class } = [];
+     }
     
+
     foreach my $parent (@$parents) {
         # make sure we don't inherit twice
         confess "Class '$class' already inherits from class '$parent'" if 
@@ -126,15 +136,15 @@ sub extends
         
         push @{ $CLASSES->{'@!parents'}{ $class } }, $parent;
 
-        # init the family list
-        $CLASSES->{'@!family'}{ $class } = [
-            @{ $CLASSES->{'@!family' }{ $class  } },
-            @{ $CLASSES->{'@!parents'}{ $parent } },
-            ];
+        foreach my $ancestor (@{ $CLASSES->{'@!parents'}{ $parent } }) {
+            push @{ $CLASSES->{'@!family'}{ $class } }, $ancestor 
+                unless grep /^$ancestor$/, 
+                            @{$CLASSES->{'@!family'}{ $class }};
+        }
         
+        push @{ $CLASSES->{'@!family'}{ $class } }, $parent;
+    }
 
-        push @{$CLASSES->{'@!family'}{ $class }}, $parent unless 
-            Coat::Meta->is_family( $class, $parent )}
 }
 
 # returns all the classes the class inherits from (extends '')
