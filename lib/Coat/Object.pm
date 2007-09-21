@@ -22,13 +22,7 @@ sub new {
 # returns the meta-class description of that instance
 sub meta {
     my ($self) = @_;
-    return Coat::Meta->declare( ref($self) );
-}
-
-# tells if the given attribute is delcared for the class of that instance
-sub has_attr {
-    my ( $self, $var ) = @_;
-    return Coat::Meta->has( ref($self), $var );
+    return Coat::Meta->class( ref($self) );
 }
 
 # init an instance : put default values and set values

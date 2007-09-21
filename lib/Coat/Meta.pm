@@ -15,14 +15,11 @@ my $CLASSES = {};
 sub classes { $CLASSES }
 
 sub attributes { $CLASSES->{ $_[1] } }
-sub declare 
+sub class
 { 
     my ($self, $class) = @_;
     
     $CLASSES->{ $class } ||= {};
-    
-    $CLASSES->{'@!parents'}{ $class } = [] 
-        unless defined $CLASSES->{'@!parents'}{ $class };
     
     $CLASSES->{'@!family'}{ $class } = [] 
         unless defined $CLASSES->{'@!family'}{ $class };
@@ -39,11 +36,11 @@ sub attribute
         
     # the attribute description may already exist 
     my $desc = Coat::Meta->has( $class, $attribute ); 
-    $desc = {} unless defined $desc;
-    $desc->{type} = 'Scalar' unless exists $desc->{type};
     
     # we define the attribute for the class
     if (@_ == 4) {
+        $desc = {} unless defined $desc;
+        $desc->{type} = 'Scalar' unless exists $desc->{type};
         return $CLASSES->{ $class }{ $attribute } = { %{$desc}, %{$value}};
     }
 
@@ -51,7 +48,6 @@ sub attribute
     # either from ourselves, or from our parents
     else {
         return $desc if defined $desc;
-
         confess "Attribute $attribute was not previously declared ".
                 "for class $class";
     }
@@ -78,7 +74,7 @@ sub has($$$)
 
     # else, we'll look inside each of our parents, recursively
     # until we stop or find one ancestor with the atttribute
-    foreach my $parent (Coat::Meta->parents( $class )) {
+    foreach my $parent (@{ Coat::Meta->parents( $class ) }) {
         my $parent_attr = Coat::Meta->has( $parent, $attribute );
         return $parent_attr if defined $parent_attr;
     }
@@ -95,7 +91,7 @@ sub all_attributes($$;$)
     $hash = {} unless defined $hash;
 
     # start with the parents so we can overwrite their attrs
-    foreach my $parent (Coat::Meta->parents( $class ) ) {
+    foreach my $parent (@{ Coat::Meta->parents( $class ) }) {
         $hash = Coat::Meta->all_attributes($parent, $hash);
     }
     
@@ -110,10 +106,17 @@ sub is_family
     return grep /^$parent$/, @{$CLASSES->{'@!family'}{ $class }};
 }
 
+
+sub parents 
+{ 
+    my ($self, $class) = @_;
+    { no strict 'refs'; return \@{"${class}::ISA"}; }
+}
+
 sub is_parent 
 { 
     my ($self, $class, $parent) = @_;
-    return grep /^$parent$/, @{$CLASSES->{'@!parents'}{ $class }};
+    return grep /^$parent$/, @{ Coat::Meta->parents( $class ) };
 }
 
 sub family { $CLASSES->{'@!family'}{ $_[1] } }
@@ -134,9 +137,7 @@ sub extends
         confess "Class '$class' already inherits from class '$parent'" if 
             Coat::Meta->is_family( $class, $parent );
         
-        push @{ $CLASSES->{'@!parents'}{ $class } }, $parent;
-
-        foreach my $ancestor (@{ $CLASSES->{'@!parents'}{ $parent } }) {
+        foreach my $ancestor (@{ Coat::Meta->parents( $parent ) }) {
             push @{ $CLASSES->{'@!family'}{ $class } }, $ancestor 
                 unless grep /^$ancestor$/, 
                             @{$CLASSES->{'@!family'}{ $class }};
@@ -145,17 +146,6 @@ sub extends
         push @{ $CLASSES->{'@!family'}{ $class } }, $parent;
     }
 
-}
-
-# returns all the classes the class inherits from (extends '')
-sub parents 
-{ 
-    my ($self, $class) = @_;
-    $class = caller unless defined $class;
-
-    return wantarray 
-        ? @{ $CLASSES->{'@!parents'}{ $class } }
-        : $CLASSES->{'@!parents'}{ $class };
 }
 
 sub modifiers

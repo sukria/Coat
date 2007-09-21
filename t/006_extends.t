@@ -3,6 +3,7 @@
 use Test::More 'no_plan';
 use strict;
 use warnings;
+use Coat::Meta;
 
 # classes 
 {
@@ -42,10 +43,10 @@ isa_ok($item, 'Point3D');
 isa_ok($item, 'Item');
 
 # make sure the father didn't get any attribute property of his son
-ok( ( ! $point2d->has_attr('z')), "! \$point2d->can('z')" );
+ok( ( ! Coat::Meta->has(ref($point2d), 'z')), "! \$point2d->can('z')" );
 
 # make sure the son can actually use its particularity
-ok( ( $point3d->has_attr('z')), "\$point3d->can('z')" );
+ok( ( Coat::Meta->has(ref($point3d), 'z')), "\$point3d->can('z')" );
 
 # now play with attributes
 ok( $point3d->x(3), '$point3d->x(3)' );

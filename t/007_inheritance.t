@@ -45,6 +45,7 @@ package main;
 use strict;
 use warnings;
 
+use Coat::Meta;
 use Test::Simple qw(no_plan);
 
 my $man = new Person name => 'John';
@@ -55,12 +56,12 @@ ok(defined $man, 'new Person');
 ok(defined $soldier, 'new Soldier');
 ok(defined $general, 'new General');
 
-ok($man->has_attr('name'), '$man->has_attr(name)');
-ok($man->has_attr('force'), '$man->has_attr(force)');
-ok($soldier->has_attr('name'), '$soldier->has_attr(name)');
-ok($soldier->has_attr('force'), '$soldier->has_attr(force)');
-ok($general->has_attr('name'), '$general->has_attr(name)');
-ok($general->has_attr('force'), '$general->has_attr(force)');
+ok(Coat::Meta->has(ref($man), 'name'), '$man->has_attr(name)');
+ok(Coat::Meta->has(ref($man), 'force'), '$man->has_attr(force)');
+ok(Coat::Meta->has(ref($soldier), 'name'), '$soldier->has_attr(name)');
+ok(Coat::Meta->has(ref($soldier), 'force'), '$soldier->has_attr(force)');
+ok(Coat::Meta->has(ref($general), 'name'), '$general->has_attr(name)');
+ok(Coat::Meta->has(ref($general), 'force'), '$general->has_attr(force)');
 
 ok($man->force == 1, '$man->force == 1');
 ok($soldier->force == 3, '$soldier->force == 3');

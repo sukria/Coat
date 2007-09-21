@@ -59,20 +59,16 @@ sub __extends_class {
     my ( $mothers, $class ) = @_;
     $class = getscope() unless defined $class;
 
-    # the extends mechanism overwrite the @ISA list
-    { no strict 'refs'; @{"${class}::ISA"} = (); }
-
-    # then we inherit from all the mothers given
+    # then we inherit from all the mothers given, if they are valid
     foreach my $mother (@$mothers) {
         confess "Class '$mother' is unknown, cannot extends"
           unless Coat::Meta->exists($mother);
-
-        # add the mother to our ancestors
-        { no strict 'refs'; push @{"${class}::ISA"}, $mother; }
-
-        # save the fact that $class inherits from $mother
         Coat::Meta->extends( $class, $mother );
     }
+
+    # Add all the mothers to our ancestors.
+    # The extends mechanism overwrite the @ISA list.
+    { no strict 'refs'; @{"${class}::ISA"} = @$mothers; }
 }
 
 # the public inheritance method, takes a list of class we should inherit from
@@ -185,10 +181,10 @@ sub import {
     warnings->import;
 
     # delcare the class
-    Coat::Meta->declare( getscope() );
+    Coat::Meta->class( getscope() );
 
     # be sure Coat::Object is known as a valid class
-    Coat::Meta->declare('Coat::Object');
+    Coat::Meta->class('Coat::Object');
 
     # force inheritance from Coat::Object
     __extends_class( ['Coat::Object'], getscope() );
