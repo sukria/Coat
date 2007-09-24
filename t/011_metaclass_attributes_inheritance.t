@@ -8,10 +8,10 @@ BEGIN { use_ok('Coat::Meta')}
     package Foo;
     use Coat;
     has 'field_from_foo_string' => (
-        type => 'String'
+        isa => 'String'
     );
     has 'field_from_foo_int' => (
-        type => 'Int',
+        isa => 'Int',
         default => 1
     );
 
@@ -74,8 +74,8 @@ is(keys %{ $baz }, 4,
 is(keys %{ $bal }, 4,
     'BalBaz has the correct number of attributes');
 
-is($baz->{'field_from_foo_int'}{'type'}, 'Int',
-    qq/Baz kept the type for Foo's field_from_foo_int/);
+is($baz->{'field_from_foo_int'}{'isa'}, 'Int',
+    qq/Baz kept the isa for Foo's field_from_foo_int/);
 
 is($baz->{'field_from_foo_int'}{'default'}, 2,
     qq/default value has been overwritten for Foo's field_from_foo_int/);

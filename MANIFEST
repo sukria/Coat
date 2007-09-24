@@ -4,5 +4,6 @@ README
 lib/Coat.pm
 lib/Coat/Object.pm
 lib/Coat/Meta.pm
+lib/Coat/Type
 COPYING
 Makefile.PL

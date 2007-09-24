@@ -40,7 +40,7 @@ sub attribute
     # we define the attribute for the class
     if (@_ == 4) {
         $desc = {} unless defined $desc;
-        $desc->{type} = 'Scalar' unless exists $desc->{type};
+        $desc->{isa} = 'Any' unless exists $desc->{isa};
         return $CLASSES->{ $class }{ $attribute } = { %{$desc}, %{$value}};
     }
 

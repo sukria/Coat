@@ -2,11 +2,11 @@ package Person;
 use Coat;
 
 has 'name' => (
-    type => 'String',
+    isa => 'Str',
 );
 
 has 'force' => (
-    type => 'Int',
+    isa => 'Int',
     default => 1
 );
 
@@ -21,7 +21,7 @@ use Coat;
 extends 'Person';
 
 has 'force' => (
-    type => 'Int',
+    isa => 'Int',
     default => 3
 );
 
@@ -36,7 +36,7 @@ use Coat;
 extends 'Soldier';
 
 has 'force' => (
-    type => 'Int',
+    isa => 'Int',
     default => '5'
 );
 

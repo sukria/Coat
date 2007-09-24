@@ -9,10 +9,9 @@ use Exporter;
 use base 'Exporter';
 use vars qw(@EXPORT $VERSION $AUTHORITY);
 
-# All the classes descriptions are handled by Coat::MetaClass
 use Coat::Meta;
-# This is the mother class for each class that uses Coat
 use Coat::Object;
+use Coat::Types;
 
 $VERSION   = '0.1_0.3';
 $AUTHORITY = 'cpan:SUKRIA';
@@ -35,11 +34,7 @@ sub has {
         
         # want a set()
         if ( @_ > 1 ) {
-            my $type = $attr->{'type'};
-
-            confess "$type '$attribute' cannot be set to '$value'"
-              unless ( __value_is_valid( $value, $type ) );
-
+            Coat::Types->validate( $attr->{'isa'}, $attribute, $value );
             return $self->{$attribute} = $value;
         }
 
@@ -223,42 +218,6 @@ sub __bind_coderef_to_symbol($$) {
     }
 }
 
-# check the attributes integrity
-sub __value_is_valid($$) {
-    my ( $value, $type ) = @_;
-
-    return 1 if $type eq 'Scalar';
-
-    my $lexical_rules = {
-        Int     => '^\d+$',
-        String  => '\w*',
-        Boolean => '^[01]$',
-    };
-
-    if ( defined $lexical_rules->{$type} ) {
-        my $pattern = $lexical_rules->{$type};
-        return $value =~ /$pattern/;
-    }
-
-    # refs
-    elsif ( $type eq 'ArrayRef' ) {
-        return ref($value) eq 'ARRAY';
-    }
-
-    elsif ( $type eq 'HashRef' ) {
-        return ref($value) eq 'HASH';
-    }
-
-    elsif ( $type eq 'CodeRef' ) {
-        return ref($value) eq 'CODE';
-    }
-
-    # take the type as a classname
-    else {
-        return ref($value) eq $type;
-    }
-}
-
 1;
 __END__
 
@@ -303,8 +262,8 @@ Here is a basic example with a class "Point":
                # inherits from Coat::Object, the mother-class.
 
     # describe attributes...
-    has 'x' => (type => 'Int', default => 0);
-    has 'y' => (type => 'Int', default => 0);
+    has 'x' => (isa=> 'Int', default => 0);
+    has 'y' => (isa => 'Int', default => 0);
 
     # and your done
     1;
@@ -337,7 +296,7 @@ this documentation:
   use Coat;
   extends 'Point';
 
-  has 'z' => (type => 'Int', default => 0):
+  has 'z' => (isa=> 'Int', default => 0):
 
   my $point3d = new Point3D x => 1, y => 3, z => 1;
   $point3d->x;    # will return: 1
@@ -351,7 +310,7 @@ The static method B<has> allows you to define attributes for your class.
 You can handle each attribute options with the %options hashtable. The
 following options are supported:
 
-=head3 type
+=head3 isa
 
 More to come later here...
 

@@ -11,19 +11,19 @@ use Coat::Meta;
 
     use Coat;
 
-    has 'x' => ( type => 'Int', default => 0);
-    has 'y' => ( type => 'Int', default => 0);
+    has 'x' => ( isa => 'Int', default => 0);
+    has 'y' => ( isa => 'Int', default => 0);
 
     package Point3D;
 
     use Coat;
     extends 'Point';
 
-    has 'z' => ( type => 'Int', default => 0);
+    has 'z' => ( isa => 'Int', default => 0);
 
     package Item;
     use Coat;
-    has name => (type => 'String');
+    has name => (isa => 'Str');
 
     package Item3D;
     use Coat;
