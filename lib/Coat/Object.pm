@@ -34,7 +34,10 @@ sub init {
     my $class_attr = Coat::Meta->all_attributes( ref( $self ) );
     foreach my $attr ( keys %{$class_attr} ) {
         if ( defined $class_attr->{$attr}{'default'} ) {
-            $self->$attr( $class_attr->{$attr}{'default'} );
+            my $default = $class_attr->{$attr}{'default'};
+            ref $default
+              ? $self->$attr( &$default(@_) ) # we have a CODE ref
+              : $self->$attr( $default );     # we have a plain scalar
         }
     }
 

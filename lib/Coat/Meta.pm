@@ -3,6 +3,7 @@ package Coat::Meta;
 use strict;
 use warnings;
 use Carp 'confess';
+use Scalar::Util 'reftype';
 use vars qw($VERSION $AUTHORITY);
 
 $VERSION   = '0.1_0.4';
@@ -41,6 +42,16 @@ sub attribute
     if (@_ == 4) {
         $desc = {} unless defined $desc;
         $desc->{isa} = 'Any' unless exists $desc->{isa};
+        
+        # check attribute description
+        if (defined $desc->{default}) {
+            if (( ref($desc->{default})) && 
+                ('CODE' ne reftype($desc->{default}))) {
+                confess "Default must be a code reference or a simple scalar for "
+                        . "attribute '$attribute' : ".$desc->{default};
+            }
+        }
+
         return $CLASSES->{ $class }{ $attribute } = { %{$desc}, %{$value}};
     }
 

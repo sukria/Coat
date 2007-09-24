@@ -7,7 +7,7 @@ has 'name' => (
 
 has 'force' => (
     isa => 'Int',
-    default => 1
+    default => 1,
 );
 
 sub walk
@@ -22,7 +22,7 @@ extends 'Person';
 
 has 'force' => (
     isa => 'Int',
-    default => 3
+    default => 3,
 );
 
 sub attack
@@ -37,7 +37,7 @@ extends 'Soldier';
 
 has 'force' => (
     isa => 'Int',
-    default => '5'
+    default => '5',
 );
 
 package main;

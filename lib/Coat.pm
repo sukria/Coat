@@ -19,6 +19,17 @@ $AUTHORITY = 'cpan:SUKRIA';
 # our exported keywords for class description
 @EXPORT = qw(has extends before after around);
 
+# Prototypes for private methods
+sub _bind_coderef_to_symbol($$);
+sub _extends_class($;$);
+sub _value_is_valid($$);
+sub _compile_around_modifier(@);
+sub _build_sub_with_hook($$);
+
+##############################################################################
+# Public static methods
+##############################################################################
+
 # has() declares an attribute and builds the corresponding accessors
 sub has {
     my ( $attribute, %options ) = @_;
@@ -45,25 +56,7 @@ sub has {
     };
 
     # now bind the subref to the appropriate symbol in the caller class
-    __bind_coderef_to_symbol( $accessor_code, $accessor );
-}
-
-# the private method for declaring inheritance, we can here overide the
-# caller class with a random one, useful for our internal cooking, see import().
-sub __extends_class {
-    my ( $mothers, $class ) = @_;
-    $class = getscope() unless defined $class;
-
-    # then we inherit from all the mothers given, if they are valid
-    foreach my $mother (@$mothers) {
-        confess "Class '$mother' is unknown, cannot extends"
-          unless Coat::Meta->exists($mother);
-        Coat::Meta->extends( $class, $mother );
-    }
-
-    # Add all the mothers to our ancestors.
-    # The extends mechanism overwrite the @ISA list.
-    { no strict 'refs'; @{"${class}::ISA"} = @$mothers; }
+    _bind_coderef_to_symbol( $accessor_code, $accessor );
 }
 
 # the public inheritance method, takes a list of class we should inherit from
@@ -71,71 +64,7 @@ sub extends {
     my (@mothers) = @_;
     confess "Cannot extend without a class name"
       unless @mothers;
-    __extends_class( \@mothers, getscope() );
-}
-
-
-# The idea here is to loop on each coderef given
-# and build subs to ensure the orig coderef is correctly propagated.
-# -> We rewrite the "around" hooks defined to pass their coderef neighboor as
-# a first argument.
-# (big thank to STEVAN's Class::MOP here, which was helpful with the idea of
-# $compile_around_method)
-sub __compile_around_modifier {
-    {
-        my $orig = shift;
-        return $orig unless @_;
-
-        my $hook = shift;
-        @_ = ( sub { $hook->( $orig, @_ ) }, @_ );
-        redo;
-    }
-}
-
-# This one is the wrapper builder for method with hooks.
-# It can mix up before, after and around hooks.
-sub __build_sub_with_hook($$) {
-    my ( $class, $method ) = @_;
-
-    my $parents      = Coat::Meta->parents( $class );
-    # FIXME : we have to find the good super: the one who provides the sub
-    my $super = $parents->[scalar(@$parents) - 1];
-
-    my $full_method  = "${class}::${method}";
-    my $super_method = *{ qualify_to_ref( $method => $super ) };
-
-    my ( $before, $after, $around ) = (
-        Coat::Meta->before_modifiers( $class, $method ),
-        Coat::Meta->after_modifiers ( $class, $method ),
-        Coat::Meta->around_modifiers( $class, $method ),
-    );
-
-    my $modified_method_code = sub {
-        my ( $self, @args ) = @_;
-        my @result;
-        my $result;
-
-        $_->(@_) for @$before;
-
-        my $around_modifier =
-          __compile_around_modifier( \&$super_method, @$around );
-
-        ( defined wantarray )
-          ? (
-            wantarray
-            ? ( @result = $around_modifier->(@_) )
-            : ( $result = $around_modifier->(@_) )
-          )
-          : ( $around_modifier->(@_) );
-
-        $_->(@_) for @$after;
-
-        return unless defined wantarray;
-        return wantarray ? @result : $result;
-    };
-
-    # now bind the new method to the appropriate symbol
-    __bind_coderef_to_symbol( $modified_method_code, $full_method );
+    _extends_class( \@mothers, getscope() );
 }
 
 # the before hook catches the call to an inherited method and exectue
@@ -144,7 +73,7 @@ sub before {
     my ( $method, $code ) = @_;
     my $class = getscope();
     Coat::Meta->before_modifiers( $class, $method, $code );
-    __build_sub_with_hook( $class, $method );
+    _build_sub_with_hook( $class, $method );
 }
 
 # the after hook catches the call to an inherited method and executes
@@ -153,7 +82,7 @@ sub after {
     my ( $method, $code ) = @_;
     my $class = getscope();
     Coat::Meta->after_modifiers( $class, $method, $code );
-    __build_sub_with_hook( $class, $method );
+    _build_sub_with_hook( $class, $method );
 }
 
 # the around hook catches the call to an inherited method and lets you do
@@ -163,7 +92,7 @@ sub around {
     my ( $method, $code ) = @_;
     my $class = getscope();
     Coat::Meta->around_modifiers( $class, $method, $code );
-    __build_sub_with_hook( $class, $method );
+    _build_sub_with_hook( $class, $method );
 }
 
 # we override the import method to actually force the "strict" and "warnings"
@@ -182,7 +111,7 @@ sub import {
     Coat::Meta->class('Coat::Object');
 
     # force inheritance from Coat::Object
-    __extends_class( ['Coat::Object'], getscope() );
+    _extends_class( ['Coat::Object'], getscope() );
 
     return if $caller eq 'main';
     Coat->export_to_level( 1, @_ );
@@ -206,10 +135,91 @@ sub getscope {
 }
 
 ##############################################################################
-# Private methods (only called from Coat.pm)
+# Private methods
 ##############################################################################
 
-sub __bind_coderef_to_symbol($$) {
+# The idea here is to loop on each coderef given
+# and build subs to ensure the orig coderef is correctly propagated.
+# -> We rewrite the "around" hooks defined to pass their coderef neighboor as
+# a first argument.
+# (big thank to STEVAN's Class::MOP here, which was helpful with the idea of
+# $compile_around_method)
+sub _compile_around_modifier(@) {
+    {
+        my $orig = shift;
+        return $orig unless @_;
+
+        my $hook = shift;
+        @_ = ( sub { $hook->( $orig, @_ ) }, @_ );
+        redo;
+    }
+}
+
+# This one is the wrapper builder for method with hooks.
+# It can mix up before, after and around hooks.
+sub _build_sub_with_hook($$) {
+    my ( $class, $method ) = @_;
+
+    my $parents      = Coat::Meta->parents( $class );
+    # FIXME : we have to find the good super: the one who provides the sub
+    my $super = $parents->[scalar(@$parents) - 1];
+
+    my $full_method  = "${class}::${method}";
+    my $super_method = *{ qualify_to_ref( $method => $super ) };
+
+    my ( $before, $after, $around ) = (
+        Coat::Meta->before_modifiers( $class, $method ),
+        Coat::Meta->after_modifiers ( $class, $method ),
+        Coat::Meta->around_modifiers( $class, $method ),
+    );
+
+    my $modified_method_code = sub {
+        my ( $self, @args ) = @_;
+        my @result;
+        my $result;
+
+        $_->(@_) for @$before;
+
+        my $around_modifier =
+          _compile_around_modifier( \&$super_method, @$around );
+
+        ( defined wantarray )
+          ? (
+            wantarray
+            ? ( @result = $around_modifier->(@_) )
+            : ( $result = $around_modifier->(@_) )
+          )
+          : ( $around_modifier->(@_) );
+
+        $_->(@_) for @$after;
+
+        return unless defined wantarray;
+        return wantarray ? @result : $result;
+    };
+
+    # now bind the new method to the appropriate symbol
+    _bind_coderef_to_symbol( $modified_method_code, $full_method );
+}
+
+# the private method for declaring inheritance, we can here overide the
+# caller class with a random one, useful for our internal cooking, see import().
+sub _extends_class($;$) {
+    my ( $mothers, $class ) = @_;
+    $class = getscope() unless defined $class;
+
+    # then we inherit from all the mothers given, if they are valid
+    foreach my $mother (@$mothers) {
+        confess "Class '$mother' is unknown, cannot extends"
+          unless Coat::Meta->exists($mother);
+        Coat::Meta->extends( $class, $mother );
+    }
+
+    # Add all the mothers to our ancestors.
+    # The extends mechanism overwrite the @ISA list.
+    { no strict 'refs'; @{"${class}::ISA"} = @$mothers; }
+}
+
+sub _bind_coderef_to_symbol($$) {
     my ( $coderef, $symbol ) = @_;
     {
         no strict 'refs';
@@ -217,6 +227,8 @@ sub __bind_coderef_to_symbol($$) {
         *$symbol = $coderef;
     }
 }
+
+
 
 1;
 __END__
@@ -262,7 +274,7 @@ Here is a basic example with a class "Point":
                # inherits from Coat::Object, the mother-class.
 
     # describe attributes...
-    has 'x' => (isa=> 'Int', default => 0);
+    has 'x' => (isa => 'Int', default => 0);
     has 'y' => (isa => 'Int', default => 0);
 
     # and your done
@@ -296,7 +308,7 @@ this documentation:
   use Coat;
   extends 'Point';
 
-  has 'z' => (isa=> 'Int', default => 0):
+  has 'z' => (isa => 'Int', default => 0):
 
   my $point3d = new Point3D x => 1, y => 3, z => 1;
   $point3d->x;    # will return: 1
