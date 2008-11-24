@@ -35,33 +35,36 @@ sub coerce {
     foreach my $source (keys %{ $self->coercion_map }) {
         # if current value passes the current source check, coercing
         my $tc = Coat::Types::find_type_constraint($source);
-        my $ok;
-        eval { 
-            $ok = $tc->validate($value) 
-        };
-        if ($ok && !$@) {
-            return $self->{coercion_map}{$source}->($value);
-        }
+        return $self->{coercion_map}{$source}->($value) 
+            if $tc->silent_validate($value);
     }
     return $value;
 }
 
 # check the value through the type constraints
-sub validate { 
+sub silent_validate { 
     my ($self, $value) = @_;
     local $_ = $value;
 
-    my $msg = (defined $self->message) 
-        ? $self->message->()
-        : "Value '" .(defined $value ? $value : 'undef')
-          ."' does not validate type constraint '".$self->name."'";
-
     # validates the parent's type-constraint if exists
-    (defined $self->parent) && 
-        Coat::Types::find_type_constraint( $self->parent )->validate( $value );
+    if (defined $self->parent) {
+        Coat::Types::find_type_constraint( $self->parent )->silent_validate( $value )
+            or return 0;
+    }
+    return $self->validation->($value);
+}
 
-    # pass the value through the check
-    $self->validation->($value) or confess $msg;
+sub validate {
+    my ($self, $value) = @_;
+    unless ($self->silent_validate($value)) {
+        local $_ = $value;
+        my $msg = (defined $self->message) 
+            ? $self->message->()
+            : "Value '" .(defined $value ? $value : 'undef')
+            ."' does not validate type constraint '".$self->name."'";
+        confess $msg;
+    }
+    return 1;
 }
 
 sub has_coercion {
