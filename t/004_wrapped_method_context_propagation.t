@@ -15,7 +15,9 @@ BEGIN {
 
     has x => ( is => 'rw', default => 0 );
 
-    sub inc { $_[0]->x( 1 + $_[0]->x ) }
+    sub inc { 
+        $_[0]->x( 1 + $_[0]->x );
+    }
 
     sub scalar_or_array {
         wantarray ? (qw/a b c/) : "x";

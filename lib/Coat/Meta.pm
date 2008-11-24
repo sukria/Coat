@@ -4,10 +4,6 @@ use strict;
 use warnings;
 use Carp 'confess';
 use Scalar::Util 'reftype';
-use vars qw($VERSION $AUTHORITY);
-
-$VERSION   = '0.1_0.4';
-$AUTHORITY = 'cpan:SUKRIA';
 
 # This is the classes placeholder for attribute descriptions
 my $CLASSES = {};
@@ -15,7 +11,10 @@ my $CLASSES = {};
 # the root accessor: returns the whole data structure, all meta classes
 sub classes { $CLASSES }
 
-sub attributes { $CLASSES->{ $_[1] } }
+# returns all attributes for the given class
+sub attributes { $CLASSES->{ $_[1] } || {} }
+
+# returns the meta-data for the given class
 sub class
 { 
     my ($self, $class) = @_;
@@ -33,7 +32,7 @@ sub class
 # children
 sub attribute 
 {
-    my ($self, $class, $attribute, $value) = @_;
+    my ($self, $class, $attribute, $attr_desc) = @_;
         
     # the attribute description may already exist 
     my $desc = Coat::Meta->has( $class, $attribute ); 
@@ -41,8 +40,18 @@ sub attribute
     # we define the attribute for the class
     if (@_ == 4) {
         $desc = {} unless defined $desc;
+
+        # default values for attribute description
         $desc->{isa} = 'Any' unless exists $desc->{isa};
-        
+        $desc->{is}  = 'rw'  unless exists $desc->{is};
+
+        # if a trigger is set, must be a coderef
+        if (defined $attr_desc->{'trigger'}) {
+            my $trigger = $attr_desc->{'trigger'};
+            confess "The trigger option must be passed a code reference" 
+                unless ref $trigger && (ref $trigger eq 'CODE');
+        }
+
         # check attribute description
         if (defined $desc->{default}) {
             if (( ref($desc->{default})) && 
@@ -52,7 +61,7 @@ sub attribute
             }
         }
 
-        return $CLASSES->{ $class }{ $attribute } = { %{$desc}, %{$value}};
+        return $CLASSES->{ $class }{ $attribute } = { %{$desc}, %{$attr_desc}};
     }
 
     # we have to return the attribute description
@@ -70,6 +79,21 @@ sub exists
     return exists $CLASSES->{ $class };
 }
 
+# returns the default value for the given $class/$attr
+sub attr_default($$) {
+    my( $self, $obj, $attr) = @_;
+    my $class = ref $obj;
+
+    my $meta = Coat::Meta->has( $class, $attr );
+
+    my $default = $meta->{'default'};
+    return undef unless defined $default;
+
+    return (ref $default)
+        ? $default->($obj)  # we have a CODE ref
+        : $default;     # we have a plain scalar
+}
+
 # this method looks for the attribute description in the whole hierarchy 
 # of the class, starting by the lowest leaf.
 # returns the description or undef if not found.
@@ -77,7 +101,6 @@ sub has($$$);
 sub has($$$)
 { 
     my ($self, $class, $attribute) = @_;
-
 
     # if the attribute is declared for us, it's ok
     return $CLASSES->{ $class }{ $attribute } if 
@@ -95,15 +118,13 @@ sub has($$$)
 }
 
 # This will build the attributes for a class with all inherited attributes
-sub all_attributes($$;$);
-sub all_attributes($$;$)
+sub all_attributes
 {
     my ($self, $class, $hash) = @_;
     $hash = {} unless defined $hash;
 
-    # start with the parents so we can overwrite their attrs
-    foreach my $parent (@{ Coat::Meta->parents( $class ) }) {
-        $hash = Coat::Meta->all_attributes($parent, $hash);
+    foreach my $parent (@{ Coat::Meta->family( $class ) }) {
+        $hash = { %{ $hash }, %{ Coat::Meta->attributes( $parent ) } };
     }
     
     $hash = { %{ $hash }, %{ Coat::Meta->attributes( $class ) } };
@@ -124,15 +145,41 @@ sub parents
     { no strict 'refs'; return \@{"${class}::ISA"}; }
 }
 
+sub class_precedence_list {
+    my ($self, $class) = @_;
+    return if !$class;
+
+    ( $class, map { $self->class_precedence_list($_) } @{$self->parents($class)} );
+}
+
+sub linearized_isa {
+    my ($self, $class) = @_;
+    my %seen;
+    grep { !( $seen{$_}++ ) } $self->class_precedence_list($class);
+}
+
 sub is_parent 
 { 
     my ($self, $class, $parent) = @_;
     return grep /^$parent$/, @{ Coat::Meta->parents( $class ) };
 }
 
-sub family { $CLASSES->{'@!family'}{ $_[1] } }
+sub family { 
+    my ($self, $class) = @_;
+    $CLASSES->{'@!family'}{ $class } ||= Coat::Meta->parents( $class );
+}
 
-sub extends 
+sub add_to_family {
+    my ($self, $class, $parent) = @_;
+    
+    # add the parent to the family if not already present
+    if (not grep /^$parent$/, @{$CLASSES->{'@!family'}{ $class }}) {
+        push @{ $CLASSES->{'@!family'}{ $class } }, $parent; 
+    }
+}
+
+sub extends($$$);
+sub extends($$$)
 { 
     my ($self, $class, $parents) = @_;
     $parents = [$parents] unless ref $parents;
@@ -142,21 +189,15 @@ sub extends
         $CLASSES->{'@!family'}{ $class } = [];
      }
     
-
+    # loop on each parent, add it to family and do the same 
+    # with recursion through its family
     foreach my $parent (@$parents) {
-        # make sure we don't inherit twice
-        confess "Class '$class' already inherits from class '$parent'" if 
-            Coat::Meta->is_family( $class, $parent );
-        
         foreach my $ancestor (@{ Coat::Meta->parents( $parent ) }) {
-            push @{ $CLASSES->{'@!family'}{ $class } }, $ancestor 
-                unless grep /^$ancestor$/, 
-                            @{$CLASSES->{'@!family'}{ $class }};
+            Coat::Meta->extends($class, $ancestor);
         }
-        
-        push @{ $CLASSES->{'@!family'}{ $class } }, $parent;
+        # we do it at the end, so we respect the order of ancestry
+        Coat::Meta->add_to_family($class, $parent);
     }
-
 }
 
 sub modifiers

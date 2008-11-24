@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More 'no_plan';
+use Test::More tests => 13;
 
 {
     package Foo;
@@ -8,7 +8,7 @@ use Test::More 'no_plan';
 
     has 'x' => ( isa => 'Int');
     has 'y' => ( isa => 'Num');
-    has 's' => ( isa => 'Str');
+    has 's' => ( isa => 'Str', required => 1);
 
     has 'a' => ( isa => 'ArrayRef');
     has 'h' => ( isa => 'HashRef');
@@ -41,7 +41,7 @@ eval { $foo->x("string") };
 ok( $@, "foo->x does not allow strings");
 
 eval { $foo->s(undef) };
-ok( $@, 'undef values are not allowed for String' );
+ok( $@, 'undef values are not allowed for required fields' );
 
 eval { $foo->a(43) };
 ok( $@, 'ArrayRef does not allow non ref values' );
