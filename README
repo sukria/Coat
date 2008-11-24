@@ -20,4 +20,5 @@ without depending on Moose. This implies you don't rely on all the features of
 Moose; and you don't depend on a huge set of dependencies, all you have to
 install is Coat (which is independant, no need of external modules).
 
-
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 

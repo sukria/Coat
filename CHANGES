@@ -1,3 +1,77 @@
+2008-??-?? -- release 0.334
+    * feature: support for BUILDARGS in Coat objects
+    * new tests from Moose in t/moose_tests/
+    * change: error message when loading a class (moose)
+
+2008-09-26 -- release 0.333
+    * bugfix: fixes multiple coercions on the same subtype.
+    * bugfix: fixes cascading inheritance
+    * bugfix: fixes validation constraint of built-in type "Object"
+
+2008-09-18 -- release 0.332
+
+    * bugfix: removed useless DateTime dependency in test suite, so Coat can be
+      built without this module installed.
+
+2008-07-04 -- release 0.331
+
+    * bugfix: don't set undef values to 1 during type validation)
+    * tests: don't use Test::Exception and DateTime in tests anymore.
+
+2008-06-01 -- release 0.330
+
+    * Possible to coerce from an external class
+    * support for lazy attributes
+
+2008-05-18 -- release 0.320
+    
+    * support for attr overloading (has '+foo')
+    * support for handles (with tests)
+    * fixed BUILD inheritance
+    * added DEMOLISH and BUILD support in Coat::Object
+    * added a dump() method in Coat::Object
+
+2008-05-15 -- release 0.310
+
+    * Fixing parameterized parsing
+
+2008-05-14 -- release 0.300
+
+    * support for anon type constraint
+
+
+2008-05-14 -- release 0.240
+
+    * Bugfix and support for real automatic class constraint
+
+2008-05-14 -- release 0.230
+    
+    * support for parameterized type constraint HashRef[] and ArrayRef[]
+    * removed useless and buggy find_matching_types, fixed ->coerce()
+    * documentation of type-constraints & friends
+
+2008-05-12 -- release 0.210
+
+    * only coerce if attr want coercion
+    * Fixing an issue when Type constraint triggers and exception
+    * extends now try to import missing classes by himself 
+      (closes: #35516).
+
+2008-05-11 -- release 0.200
+
+    * Support for real type constraints and coercion
+
+2007-10-11 -- release 0.1_0.6
+
+    * Supports for "required" and "trigger" options
+    * Better documentation
+    * Copying statement in README
+
+2007-09-28 -- release 0.1_0.5
+
+    * added Coat::Types for type constraints validation
+    * bug fixes
+
 2007-09-17 -- release 0.1_0.2 -- Alexis Sukrieh
 
     * development version, according to Perl versionning conventions.
