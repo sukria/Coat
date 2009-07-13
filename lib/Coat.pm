@@ -270,6 +270,7 @@ sub _build_sub_with_hook($$) {
         my $coderef;
         { 
             no strict 'refs'; 
+            no warnings;
             $coderef = *{ "${parent_class}::${method}" };
         }
         $super = $parent_class if defined &$coderef;
