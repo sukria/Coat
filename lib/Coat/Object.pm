@@ -26,6 +26,13 @@ sub new {
     return $self;
 }
 
+sub make_clone { 
+    my ($self) = @_;
+    my $class = ref($self);
+    my $clone = $class->new(%$self);
+    return $clone;
+}
+
 sub build_args {
     my ($self, @args) = @_;
     my $class = ref($self);
