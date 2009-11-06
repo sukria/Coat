@@ -14,7 +14,7 @@ use Coat::Meta;
 use Coat::Object;
 use Coat::Types;
 
-$VERSION   = '0.334';
+$VERSION   = '0.500';
 $AUTHORITY = 'cpan:SUKRIA';
 
 # our exported keywords for class description
@@ -101,8 +101,19 @@ sub extends {
 
 sub with {
     my (@roles) = @_;
-    my $caller = caller;
-    Coat::Meta->compose_class_with_role($caller => $_) for @roles;
+    my $caller   = caller;
+    my @methods  = Coat::Meta::_list_all_package_symbols($caller, 'CODE');
+
+    foreach my $role (@roles) {
+        my @requires = Coat::Meta->role_get_required_methods($role);
+        foreach my $required (@requires) {
+            confess ("Methods "
+                  . join(", ", @requires)
+                  . " are required by the role $role")
+                unless grep(/^$required$/, @methods);
+        }
+        Coat::Meta->compose_class_with_role($caller => $role);
+    }
 }
 
 # the before hook catches the call to an inherited method and exectue

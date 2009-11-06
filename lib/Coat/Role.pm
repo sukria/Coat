@@ -31,6 +31,10 @@ sub import {
     $class->export_to_level( 1, @_ );
 }
 
-sub requires { 1 }
+sub requires { 
+    my @methods = @_;
+    my $caller = caller;
+    Coat::Meta->role_register_required_methods($caller => @methods);
+}
 
 1;

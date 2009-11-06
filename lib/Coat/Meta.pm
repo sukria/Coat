@@ -7,6 +7,7 @@ use Scalar::Util 'reftype';
 
 # This is the classes placeholder for attribute descriptions
 my $CLASSES = {};
+my $ROLES   = {};
 
 # the root accessor: returns the whole data structure, all meta classes
 sub classes { $CLASSES }
@@ -122,6 +123,17 @@ sub compose_class_with_role {
         }
     }
     return 1;
+}
+
+sub role_register_required_methods {
+    my ($self, $role, @methods) = @_;
+    $ROLES->{$role} ||= {};
+    $ROLES->{$role}{required} = \@methods;
+}
+
+sub role_get_required_methods {
+    my ($self, $role) = @_;
+    @{ $ROLES->{$role}{required} };
 }
 
 sub exists
