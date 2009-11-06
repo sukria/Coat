@@ -133,6 +133,8 @@ sub role_register_required_methods {
 
 sub role_get_required_methods {
     my ($self, $role) = @_;
+    $ROLES->{$role} ||= {};
+    $ROLES->{$role}{required} ||= [];
     @{ $ROLES->{$role}{required} };
 }
 
