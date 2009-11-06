@@ -73,6 +73,57 @@ sub attribute
     }
 }
 
+# kindly stolen from Class::MOP
+sub _get_namespace_for_class {
+    my ($class) = @_;
+    { 
+        no strict 'refs';
+        return \%{$class . '::'};
+    }
+}
+
+sub _list_all_package_symbols {
+    my ($class, $type_filter) = @_; 
+
+    my $namespace = _get_namespace_for_class($class);
+    return keys %{$namespace} unless defined $type_filter;
+        
+    # NOTE:
+    # or we can filter based on 
+    # type (SCALAR|ARRAY|HASH|CODE)
+    if ( $type_filter eq 'CODE' ) { 
+        return grep { 
+        (ref($namespace->{$_})
+                ? (ref($namespace->{$_}) eq 'SCALAR')
+                : (ref(\$namespace->{$_}) eq 'GLOB'
+                   && defined(*{$namespace->{$_}}{CODE})));
+        } keys %{$namespace};
+    } else {
+        return grep { *{$namespace->{$_}}{$type_filter} } keys %{$namespace};
+    }
+}
+
+sub compose_class_with_role {
+    my ($self, $class, $role) = @_;
+    $CLASSES->{$class} = $CLASSES->{$role};
+    
+    # attributes
+    foreach my $attr (keys %{$CLASSES->{$class}}) {
+        my $code = Coat::_accessor_for_attr($attr);
+        Coat::_bind_coderef_to_symbol($code, "${class}::${attr}");
+    }
+
+    # methods
+    foreach my $method (_list_all_package_symbols($role, 'CODE')) {
+        next if grep /^$method$/, @Coat::Role::EXPORT;
+        { 
+            no strict 'refs';
+            *{"${class}::${method}"} = *{"${role}::${method}"}
+        }
+    }
+    return 1;
+}
+
 sub exists
 { 
     my ($self, $class) = @_;

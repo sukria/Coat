@@ -18,7 +18,7 @@ $VERSION   = '0.334';
 $AUTHORITY = 'cpan:SUKRIA';
 
 # our exported keywords for class description
-@EXPORT = qw(has extends before after around);
+@EXPORT = qw(has extends with before after around);
 
 # Prototypes for private methods
 sub _bind_coderef_to_symbol($$);
@@ -99,6 +99,12 @@ sub extends {
     _extends_class( \@mothers, getscope() );
 }
 
+sub with {
+    my (@roles) = @_;
+    my $caller = caller;
+    Coat::Meta->compose_class_with_role($caller => $_) for @roles;
+}
+
 # the before hook catches the call to an inherited method and exectue
 # the code given before the inherited method is called.
 sub before {
@@ -131,7 +137,7 @@ sub around {
 # modes to children and also to force the Coat::Object inheritance.
 sub import {
     my $caller = caller;
-    return if $caller eq 'main';
+    return if $caller eq 'main' or $caller eq 'Coat::Role';
     my $class_name = getscope();
 
     # import strict and warnings
