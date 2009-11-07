@@ -18,7 +18,15 @@ $VERSION   = '0.500';
 $AUTHORITY = 'cpan:SUKRIA';
 
 # our exported keywords for class description
-@EXPORT = qw(has extends with before after around);
+@EXPORT = qw(
+    after 
+    alias
+    around
+    before 
+    extends 
+    has 
+    with 
+);
 
 # Prototypes for private methods
 sub _bind_coderef_to_symbol($$);
@@ -30,6 +38,19 @@ sub _build_sub_with_hook($$);
 ##############################################################################
 # Public static methods
 ##############################################################################
+
+sub alias { 
+    my ($name, $method) = @_;
+    my $caller = caller;
+    { 
+        no strict 'refs';
+        my $orig = *{"${caller}::${method}"};
+        if (not defined &$orig) {
+            confess "cannot alias undefined method \"$method\"";
+        }
+        *{"${caller}::${name}"} = *{"${caller}::${method}"};
+    }
+}
 
 # has() declares an attribute and builds the corresponding accessors
 sub has {
@@ -496,6 +517,22 @@ updated value and the attribute meta-object (this is for more advanced fiddling
 and can typically be ignored). You B<cannot> have a trigger on a read-only
 attribute.
 
+=head2 ALIASES
+
+You can alias any method of a class with the keyword I<alias>, like in the
+following example:
+
+    package Foo;
+    use Coat;
+
+    sub foo { ... }
+    alias bar => 'foo';
+
+This will create a method I<bar> in the module's namespace that points to the
+same code reference as the one of the method I<foo>.
+
+You can alias any method defined in the namespace of the current class
+(including inherited methods and accessors).
 
 =head2 METHOD MODIFIERS (HOOKS)
 
