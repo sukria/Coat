@@ -1,4 +1,4 @@
-use Test::More tests => 6;
+use Test::More tests => 12;
 
 {
     package Breakable;
@@ -10,13 +10,19 @@ use Test::More tests => 6;
     package Window;
     use Coat; 
     with 'Breakable';
+
+    package Mirror;
+    use Coat;
+    extends 'Window';
 }
 
-my $w = Window->new;
-ok defined($w), 'Coat object is defined';
-isa_ok $w, 'Window';
-can_ok $w, qw(is_broken break);
+foreach my $object ('Window', 'Mirror') {
+    my $w = $object->new;
+    ok defined($w), 'Coat object is defined';
+    isa_ok $w, $object;
+    can_ok $w, qw(is_broken break);
 
-is($w->is_broken, 0, 'is_broken is false');
-ok($w->break, 'break is called');
-is($w->is_broken, 1, 'is_broken has been set');
+    is($w->is_broken, 0, 'is_broken is false');
+    ok($w->break, 'break is called');
+    is($w->is_broken, 1, 'is_broken has been set');
+}
