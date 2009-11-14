@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use Test::More tests => 15;
-use Test::Exception;
 
 {
     package Foo;
@@ -42,16 +41,15 @@ use Test::Exception;
     is($foo->boo, 50, '... got the right boo');
 }
 
-throws_ok {
-    Foo->new(bar => 10, baz => undef);
-} qr/^Attribute \(baz\) is required and cannot be undef/, '... must supply all the required attribute';
+eval { Foo->new(bar => 10, baz => undef) };
+like $@, qr/^Attribute \(baz\) is required and cannot be undef/, 
+'... must supply all the required attribute';
 
-throws_ok {
-    Foo->new(bar => 10, boo => undef);
-} qr/^Attribute \(boo\) is required and cannot be undef/, '... must supply all the required attribute';
+eval { Foo->new(bar => 10, boo => undef) };
+like $@, qr/^Attribute \(boo\) is required and cannot be undef/, 
+'... must supply all the required attribute';
 
-
-throws_ok {
-    Foo->new;
-} qr/^Attribute \(bar\) is required/, '... must supply all the required attribute';
+eval { Foo->new },
+like $@, qr/^Attribute \(bar\) is required/, 
+'... must supply all the required attribute';
 

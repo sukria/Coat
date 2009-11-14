@@ -4,8 +4,6 @@ use strict;
 use warnings;
 
 use Test::More tests => 5;
-use Test::Exception;
-
 use Coat::Types;
 
 =pod
@@ -47,13 +45,11 @@ is($foo_constraint->parent, 'Value', '... got the Value subtype for Foo');
 my $bar = Bar->new;
 isa_ok($bar, 'Bar');
 
-lives_ok {
-    $bar->foo('Foo');       
-} '... checked the type constraint correctly';
+eval { $bar->foo('Foo') };
+is $@, '', '... checked the type constraint correctly';
 
-dies_ok {
-    $bar->foo(Foo->new);       
-} '... checked the type constraint correctly';
+eval  { $bar->foo(Foo->new) };
+ok $@, '... checked the type constraint correctly';
 
 
 
