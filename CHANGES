@@ -1,3 +1,8 @@
+2009-11-14 -- release 0.500
+	* Role support (see Coat::Role)
+	* alias support 
+	* make_clone support 
+
 2008-11-25 -- release 0.334
     * feature: support for BUILDARGS in Coat objects
     * new tests from Moose in t/moose_tests/
