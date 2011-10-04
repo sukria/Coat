@@ -517,6 +517,8 @@ updated value and the attribute meta-object (this is for more advanced fiddling
 and can typically be ignored). You B<cannot> have a trigger on a read-only
 attribute.
 
+=back
+
 =head2 ALIASES
 
 You can alias any method of a class with the keyword I<alias>, like in the
