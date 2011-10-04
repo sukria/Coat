@@ -395,7 +395,15 @@ __END__
 
 =head1 NAME
 
-Coat -- A light and self-dependent meta-class for Perl5
+Coat -- A light and self-dependent meta-class for Perl5 (DEPRECATED)
+
+=head1 DEPRECATION NOTICE
+
+This module has been deprecated. Please use some other metaclass-based
+object system for Perl 5. The following are recommended (though there are
+plenty other great ones): L<Moose>, L<Mouse>, L<Moo> and L<Mo>.
+
+Coat is no longer maintained.
 
 =head1 DESCRIPTION
 
