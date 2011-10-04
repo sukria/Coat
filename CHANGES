@@ -1,3 +1,7 @@
+2011-10-04 -- release 0.501
+    * Added deprecation notice, this module is no longer maintained.
+    * POD fix (RT #41317, thanks to Ansgar).
+
 2009-11-14 -- release 0.500
 	* Role support (see Coat::Role)
 	* alias support 
